@@ -9,11 +9,11 @@ import { onMounted } from "vue";
 // const relativePath = useData().page.value.relativePath;
 
 const gitalk = new Gitalk({
-  clientID: "a8430bf8a0464113ee24",
-  clientSecret: "df4cbf03c4ceca8a39076e6b7a0fb878e55534e2",
+  clientID: "3ff6646f35dfa943d5f2",
+  clientSecret: "fb53080bea8f946710da14fb2cf3186128af689c",
   repo: "blog-comments",
-  owner: "clark-cui",
-  admin: ["clark-cui"],
+  owner: "Juzi",
+  admin: ["Juzi"],
   id: location.pathname.substring(0, 50), // Ensure uniqueness and length less than 50
   language: "zh-CN",
   distractionFreeMode: true, // Facebook-like distraction free mode
@@ -23,6 +23,4 @@ onMounted(() => {
   gitalk.render("gitalk-container");
 });
 </script>
-<style scoped>
-</style>
-
+<style scoped></style>

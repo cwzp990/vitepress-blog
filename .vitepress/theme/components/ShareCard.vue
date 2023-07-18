@@ -3,9 +3,7 @@
     <h1 class="title">
       <span>Hi, I'm Juzi 👋</span>
     </h1>
-    <p class="description">
-      A frontend developer(he/him) who is building in web3.
-    </p>
+    <p class="description">I'm a front-end developer, I'm looking for a job.</p>
   </div>
 </template>
 

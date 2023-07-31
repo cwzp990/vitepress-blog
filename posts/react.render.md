@@ -119,7 +119,7 @@ function performUnitOfWork(unitOfWork: Fiber): void {
 beginWork 的遍历并不是先查找完某一层所有的子元素再进行下一层的查找，而是只查父元素的第一个子元素，然后继续查找下一层的子元素，如果没有子元素才会查找兄弟元素，兄弟元素查找完再查找父元素的兄弟元素，类似于二叉树的前序遍历。所以对于上图的结构，遍历顺序如下:
 App->Comp1->Comp3->div1->div2->div3->div4->Comp2->div5
 
-**beginWork 阶段**
+### beginWork 阶段
 
 beginWork 主要的功能就是遍历查找子组件，建立关系树。
 
@@ -133,7 +133,7 @@ beginWork 主要的功能就是遍历查找子组件，建立关系树。
 
 - 在 update 阶段，会通过 diff 算法判断当前节点是否需要变更，如果需要变更会重新创建新的 fiber 对象并复用部分老的 fiber 对象属性，如果不需要变更则直接 clone 老的 fiber 对象；如果 diff 对比后老的 fiber 存在，新的 fiber 不存在，则会给 fiber 打上 Deletion 标签标示该元素需要删除； 如果老的 fiber 不存在，新的 fiber 存在说明是新创建的元素，则给 fiber 打上 Placement 标签
 
-**completeWork 阶段**
+### completeWork 阶段
 
 completeWork 阶段主要执行 dom 节点的创建或者标记变更。
 

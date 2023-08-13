@@ -1,0 +1,3063 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>Juzi</title>
+        <link>https://www.cwzp990.top/</link>
+        <description>Juzi' Blog</description>
+        <lastBuildDate>Sun, 13 Aug 2023 11:56:50 GMT</lastBuildDate>
+        <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
+        <generator>https://github.com/jpmonette/feed</generator>
+        <image>
+            <title>Juzi</title>
+            <url>https://www.cwzp990.top/orange.svg</url>
+            <link>https://www.cwzp990.top/</link>
+        </image>
+        <copyright>MIT License</copyright>
+        <atom:link href="https://www.cwzp990.top/feed.xml" rel="self" type="application/rss+xml"/>
+        <item>
+            <title><![CDATA[monorepo架构改造公司SDK]]></title>
+            <link>https://www.cwzp990.top/posts/monorepo.html</link>
+            <guid>https://www.cwzp990.top/posts/monorepo.html</guid>
+            <pubDate>Tue, 30 May 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[monorepo pnpm]]></description>
+            <content:encoded><![CDATA[<h2>前言</h2>
+<p>公司想要把 SDK 暴露出去，给合作公司调用，另外，我们需要把模型操作相关代码以插件的形式供团队调用，最近 monorepo 架构比较流行，借助 pnpm，我们可以将其改造一下。</p>
+<h2>什么是 monorepo</h2>
+<p>简单来说就是，将多个项目或包文件放到一个 git 仓库来管理。 目前比较广泛应用的是 yarn+lerna 的方式实现 monorepo 的管理。 一个简单的 monorepo 的目录结构类似这样：</p>
+<pre><code class="language-js">.
+├── README.md
+├── lerna.json
+├── package-lock.json
+├── package.json
+├── packages
+│   ├── @soonspacejs
+│   │   ├── plugin-camera-follower
+│   │   ├── plugin-clipping-controls
+│   │   ├── plugin-drawing-shape
+│   │   ├── plugin-drawing-topology
+│   │   ├── plugin-effect
+│   └── soonspacejs
+│       ├── README.md
+│       ├── package.json
+│       └── src
+├── rollup.config.js
+└── tsconfig.json
+</code></pre>
+<blockquote>
+<p>如上图，我们把 threejs 相关代码放到 soonspacejs 文件里，一些绘制、操作模型的代码以插件形式放到@soonspacejs 文件里。</p>
+</blockquote>
+<p>之所以应用 monorepo，主要是解决以下问题：</p>
+<ul>
+<li>
+<p>代码复用的问题</p>
+</li>
+<li>
+<p>开发流程统一</p>
+</li>
+<li>
+<p>高效管理多项目/包</p>
+</li>
+</ul>
+<h2>pnpm</h2>
+<p>pnpm 相对于 yarn/npm 的优势</p>
+<ul>
+<li>
+<p>安装速度最快（非扁平的包结构，没有 yarn/npm 的复杂的扁平算法，且只更新变化的文件）</p>
+</li>
+<li>
+<p>节省磁盘空间 （统一安装包到磁盘的某个位置，项目中的 node_modules 通过硬连接的方式链接到实际的安装地址）</p>
+</li>
+</ul>
+<h2>pnpm workspace 实践</h2>
+<h3>1. 新建仓库并初始化</h3>
+<p>新建目录 pnpm-workspace-demo，执行 npm init / pnpm init 初始化项目，生成 package.json</p>
+<h3>2. 指定项目运行的 Node、pnpm 版本</h3>
+<p>为了减少因 node 或 pnpm 的版本的差异而产生开发环境错误，我们在 package.json 中增加 engines 字段来限制版本。</p>
+<pre><code class="language-json">{
+  &quot;engines&quot;: {
+    &quot;node&quot;: &quot;&gt;=16&quot;,
+    &quot;pnpm&quot;: &quot;&gt;=7&quot;
+  }
+}
+</code></pre>
+<h3>3. 安全性设置</h3>
+<p>为了防止我们的根目录被当作包发布，我们需要在 package.json 加入如下设置：</p>
+<pre><code class="language-json">{
+  &quot;private&quot;: true
+}
+</code></pre>
+<p>pnpm 本身就支持 monorepo，不用另外安装第三方包。每个 monorepo 的根目录下必须包含 pnpm-workspace.yaml 文件</p>
+<pre><code class="language-yaml">packages:
+  # all packages in direct subdirs of packages/
+  - &quot;packages/*&quot;
+</code></pre>
+<h3>4. 安装包</h3>
+<p><strong>全局依赖包</strong></p>
+<p>有些依赖包需要安装到根目录，比如 threejs、rollup、chalk、inquirer、typescript 等，运行一下命令：</p>
+<pre><code class="language-bash">pnpm add rollup chalk inquirer typescript -Dw
+</code></pre>
+<p>-w 表示在 workspace 的根目录下安装而不是当前的目录</p>
+<p>与安装命令 pnpm add pkgname 相反的的删除依赖包 pnpm rm/remove pkgname 或 pnpm un/uninstall pkgname</p>
+<p><strong>子包依赖</strong></p>
+<p>有两种方法，一个是进入子包目录直接安装 pnpm add pkgname，另一个通过-f 指定范围：</p>
+<p><code>pnpm --filter/-F 具体包目录名/包的name/正则匹配包名/匹配目录 command</code></p>
+<p>如：pnpm -f @soonspace/plugin-camera-follower add soonspacejs</p>
+<h2>pnpm 和 npm 的区别</h2>
+<p>目前，使用 npm/yarn 安装包是扁平结构（以前是嵌套结构，npm3 之后改为扁平结构）</p>
+<p>扁平结构 就是安装一个包，那么这个包依赖的包将一起被安装到与这个包同级的目录下。比如安装一个 koa 包，打开目录下的 node_modules 会发现除了 koa 之外，多出很多其他的包。如图：</p>
+<p><img src="../images/WX20230725-212348%402x.png" alt=""></p>
+<p>嵌套结构 就是一个包的依赖包会安装在这个包文件下的 node_modules 下，而依赖的依赖会安装到依赖包文件的 node_modules 下。依此类推。如下所示:</p>
+<pre><code class="language-js">node_modules
+├─ foo
+  ├─ node_modules
+     ├─ bar
+       ├─ index.js
+       └─ package.json
+  ├─ index.js
+  └─ package.json
+</code></pre>
+<p>嵌套结构的问题在于：</p>
+<ul>
+<li>
+<p>包文件的目录可能会非常长</p>
+</li>
+<li>
+<p>重复安装包</p>
+</li>
+<li>
+<p>相同包的实例不能共享</p>
+</li>
+</ul>
+<p>而扁平结构也同样存在问题：</p>
+<ul>
+<li>
+<p>依赖结构的不确定性（不同包依赖某个包的不同版本 最终安装的版本具有不确定性）可通过 lock 文件确定安装版本</p>
+</li>
+<li>
+<p>扁平化算法复杂，耗时</p>
+</li>
+<li>
+<p>非法访问未声明的包</p>
+</li>
+</ul>
+<p>现在，我们使用 pnpm 来安装 koa，然后打开 node_modules：</p>
+<p><img src="../images/WX20230725-212849%402x.png" alt=""></p>
+<p>从上图可以发现：</p>
+<ul>
+<li>
+<p>node_modules 下只有 koa 一个包，且这个被软链到了其他的地方。</p>
+</li>
+<li>
+<p>.modlues.yaml 包含了一些 pnpm 包管理的配置信息。如下图:</p>
+</li>
+</ul>
+<p><img src="../images/WX20230725-213138%402x.png" alt=""></p>
+<p>可以看到 .pnpm 目录的实际指向的 pnpm store 的路径、pnpm 包的版本等信息</p>
+<p><img src="../images/WX20230725-220746%402x.png" alt=""></p>
+<p>由上图我们可以了解到：</p>
+<ul>
+<li>
+<p>当我们安装 bar 包时，根目录下只包含安装的包 bar</p>
+</li>
+<li>
+<p>而 node_modules 目录下的 bar 包会软链接到.pnpm/bar/node_modules/bar@*</p>
+</li>
+<li>
+<p>bar 的依赖包 foo 会被提升到.pnpm 的根目录下，其他包依赖 foo 时也会软链接到这里</p>
+</li>
+<li>
+<p>而 bar 和 foo 实际通过硬链接到.pnpm store 中</p>
+</li>
+</ul>
+<blockquote>
+<p>软链接可以理解成快捷方式。 它和 windows 下的快捷方式的作用是一样的。 硬链接等于 cp -p 加 同步更新。即文件大小和创建时间与源文件相同，源文件修改，硬链接的文件会同步更新。应用：可以防止别人误删你的源文件</p>
+</blockquote>
+<p>软链接解决了磁盘空间占用的问题，而硬链接解决了包的同步更新和统一管理问题。 还有一个巧妙的设计就是：将安装包和依赖包放在同一级目录下，即.pnpm/依赖包/node_modules 下。这个设计也就防止了 <strong>依赖包间的非法访问</strong>，根据 Node 模块路径解析规则可知，不在安装包同级的依赖包无法被访问，即只能访问安装包依赖的包。</p>
+<p>如果你还有使用 npm/yarn 的场景，那么，可以推荐使用 <strong>ni</strong> 这个工具，它可以帮你自动识别项目使用的包管理工具，你只需要一行命名就搞定了。</p>
+<p>比如： 执行命令 ni 安装依赖包，如果当前项目包含 pnpm-lock.yaml，那么会使用 pnpm install 执行安装命令，否则判断是否包含 package-lock.json/yarn.lock/bun.lockb，来确定使用哪个包管理工具去执行安装命令。</p>
+]]></content:encoded>
+            <author>cwzp990@gmail.com (Juzi)</author>
+        </item>
+        <item>
+            <title><![CDATA[前端模块机制-ESM&CommonJS]]></title>
+            <link>https://www.cwzp990.top/posts/module.html</link>
+            <guid>https://www.cwzp990.top/posts/module.html</guid>
+            <pubDate>Sun, 28 May 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[CommonJS ESM]]></description>
+            <content:encoded><![CDATA[<h2>前言</h2>
+<p>我们都知道 ESM 和 CommonJS 模块有一些差异：</p>
+<ul>
+<li>CommonJS 模块输出的是一个值的拷贝，ESM 模块输出的是值的引用。</li>
+<li>CommonJS 模块是运行时加载，ESM 模块是编译时输出接口。</li>
+</ul>
+<p>这里我们可能会提出疑问 🤔️：</p>
+<ul>
+<li>
+<p>为什么 CommonJS 模块输出的是一个值的拷贝？其具体细节是什么样子的？</p>
+</li>
+<li>
+<p>什么叫 运行时加载?</p>
+</li>
+<li>
+<p>什么叫 编译时输出接口？</p>
+</li>
+<li>
+<p>为什么 ES6 模块输出的是值的引用？</p>
+</li>
+</ul>
+<h2>CommonJS 产生的历史背景</h2>
+<p>CommonJS 由 Mozilla 工程师 Kevin Dangoor 于 2009 年 1 月创立，最初命名为 ServerJS。2009 年 8 月，该项目更名为 CommonJS。旨在解决 Javascript 中缺少模块化标准的问题。</p>
+<p>Node.js 后来也采用了 CommonJS 的模块规范。</p>
+<p>由于 CommonJS 并不是 ECMAScript 标准的一部分，所以 类似 module 和 require 并不是 JS 的关键字，仅仅是对象或者函数而已，意识到这一点很重要。</p>
+<p>我们可以在打印 module、require 查看细节：</p>
+<pre><code class="language-js">console.log(module);
+console.log(require);
+
+// out:
+Module {
+  id: '.',
+  path: '/commonJS',
+  exports: {},
+  filename: '/commonJS/c.js',
+  loaded: false,
+  children: [],
+  paths: [
+    '/commonJS/node_modules',
+    '/node_modules',
+    '/Users/xxx/Desktop/node_modules',
+    '/Users/xxx/node_modules',
+    '/Users/node_modules',
+    '/node_modules'
+  ]
+}
+
+[Function: require] {
+  resolve: [Function: resolve] { paths: [Function: paths] },
+  main: Module {
+    id: '.',
+    path: '/commonJS',
+    exports: {},
+    filename: '/commonJS/c.js',
+    loaded: false,
+    children: [],
+    paths: [
+      '/commonJS/node_modules',
+      '/node_modules',
+      '/Users/xxx/Desktop/node_modules',
+      '/Users/xxx/node_modules',
+      '/Users/node_modules',
+      '/node_modules'
+    ]
+  },
+  extensions: [Object: null prototype] {
+    '.js': [Function (anonymous)],
+    '.json': [Function (anonymous)],
+    '.node': [Function (anonymous)]
+  },
+  cache: [Object: null prototype] {
+    '/commonJS/c.js': Module {
+      id: '.',
+      path: '/commonJS',
+      exports: {},
+      filename: '/commonJS/c.js',
+      loaded: false,
+      children: [],
+      paths: [Array]
+    }
+  }
+}
+</code></pre>
+<p>可以看到 module 是一个对象， require 是一个函数，仅此而已。</p>
+<p>我们来重点介绍下 module 中的一些属性：</p>
+<ul>
+<li>
+<p>exports：这就是 module.exports 对应的值，由于还没有赋任何值给它，它目前是一个空对象。</p>
+</li>
+<li>
+<p>loaded：表示当前的模块是否加载完成。</p>
+</li>
+<li>
+<p>paths：node 模块的加载路径，这块不展开讲，感兴趣可以看 node 文档</p>
+</li>
+</ul>
+<p>require 函数中也有一些值得注意的属性：</p>
+<ul>
+<li>
+<p>main 指向当前当前引用自己的模块，所以类似 python 的 <strong>name</strong> == '<strong>main</strong>', node 也可以用 require.main === module 来确定是否是以当前模块来启动程序的。</p>
+</li>
+<li>
+<p>extensions 表示目前 node 支持的几种加载模块的方式。</p>
+</li>
+<li>
+<p>cache 表示 node 中模块加载的缓存，也就是说，当一个模块加载一次后，之后 require 不会再加载一次，而是从缓存中读取。</p>
+</li>
+</ul>
+<p>前面提到，CommonJS 中 module 是一个对象， require 是一个函数。而与此相对应的 ESM 中的 import 和 export 则是关键字，是 ECMAScript 标准的一部分。理解这两者的区别非常关键。</p>
+<h2>几个 CommonJS 例子</h2>
+<h3>在模块外为简单类型赋值：</h3>
+<pre><code class="language-js">// a.js
+let val = 1;
+
+const setVal = (newVal) =&gt; {
+  val = newVal;
+};
+
+module.exports = {
+  val,
+  setVal,
+};
+
+// b.js
+const { val, setVal } = require(&quot;./a.js&quot;);
+
+console.log(val);
+
+setVal(101);
+
+console.log(val);
+</code></pre>
+<p>运行 b.js，输出结果为：</p>
+<pre><code class="language-js">1;
+
+1;
+</code></pre>
+<h3>在模块外为引用类型赋值：</h3>
+<pre><code class="language-js">// a.js
+let obj = {
+  val: 1,
+};
+
+const setVal = (newVal) =&gt; {
+  obj.val = newVal;
+};
+
+module.exports = {
+  obj,
+  setVal,
+};
+
+// b.js
+const { obj, setVal } = require(&quot;./a.js&quot;);
+
+console.log(obj);
+
+setVal(101);
+
+console.log(obj);
+</code></pre>
+<p>运行 b.js，输出结果为：</p>
+<pre><code class="language-js">{
+  val: 1;
+}
+
+{
+  val: 101;
+}
+</code></pre>
+<h3>在模块内导出后改变简单类型：</h3>
+<pre><code class="language-js">// a.js
+let val = 1;
+
+setTimeout(() =&gt; {
+  val = 101;
+}, 100);
+
+module.exports = {
+  val,
+};
+
+// b.js
+const { val } = require(&quot;./a.js&quot;);
+
+console.log(val);
+
+setTimeout(() =&gt; {
+  console.log(val);
+}, 200);
+</code></pre>
+<p>运行 b.js，输出结果为：</p>
+<pre><code class="language-js">1;
+
+1;
+</code></pre>
+<h3>在模块内导出后用 module.exports 再导出一次：</h3>
+<pre><code class="language-js">// a.js
+setTimeout(() =&gt; {
+  module.exports = {
+    val: 101,
+  };
+}, 100);
+
+module.exports = {
+  val: 1,
+};
+
+// b.js
+const a = require(&quot;./a.js&quot;);
+
+console.log(a);
+
+setTimeout(() =&gt; {
+  console.log(a);
+}, 200);
+</code></pre>
+<p>运行 b.js，输出结果为：</p>
+<pre><code class="language-js">{
+  val: 1;
+}
+
+{
+  val: 1;
+}
+</code></pre>
+<h3>在模块内导出后用 exports 再导出一次：</h3>
+<pre><code class="language-js">// a.js
+setTimeout(() =&gt; {
+  module.exports.val = 101;
+}, 100);
+
+module.exports.val = 1;
+
+// b.js
+const a = require(&quot;./a.js&quot;);
+
+console.log(a);
+
+setTimeout(() =&gt; {
+  console.log(a);
+}, 200);
+</code></pre>
+<p>运行 b.js,输出结果为：</p>
+<pre><code class="language-js">{
+  val: 1;
+}
+
+{
+  val: 101;
+}
+</code></pre>
+<h2>尝试分析一波</h2>
+<p>在第一个中，代码可以简化为：</p>
+<pre><code class="language-js">const CModule = {
+  exports: {},
+};
+
+let val = 1;
+
+const setVal = (newVal) =&gt; {
+  val = newVal;
+};
+
+CModule.exports = {
+  val,
+  setVal,
+};
+
+const { val: useVal, setVal: useSetVal } = CModule.exports;
+
+console.log(useVal);
+
+useSetVal(101);
+
+console.log(useVal);
+</code></pre>
+<p>在第二个中，代码可以简化为：</p>
+<pre><code class="language-js">const CModule = {
+  exports: {},
+};
+
+let obj = {
+  val: 1,
+};
+
+const setVal = (newVal) =&gt; {
+  obj.val = newVal;
+};
+
+CModule.exports = {
+  obj,
+  setVal,
+};
+
+const { obj: useObj, setVal: useSetVal } = CModule.exports;
+
+console.log(useObj);
+
+useSetVal(101);
+
+console.log(useObj);
+</code></pre>
+<p>在第三个中，代码可以简化为：</p>
+<pre><code class="language-js">const CModule = {
+  exports: {},
+};
+
+let val = 1;
+
+setTimeout(() =&gt; {
+  val = 101;
+}, 100);
+
+CModule.exports = {
+  val,
+};
+
+const { val: useVal } = CModule.exports;
+
+console.log(useVal);
+
+setTimeout(() =&gt; {
+  console.log(useVal);
+}, 200);
+</code></pre>
+<p>在第四个中，代码可以简化为：</p>
+<pre><code class="language-js">const CModule = {
+  exports: {},
+};
+
+setTimeout(() =&gt; {
+  CModule.exports = {
+    val: 101,
+  };
+}, 100);
+
+CModule.exports = {
+  val: 1,
+};
+
+const useA = CModule.exports;
+
+console.log(useA);
+
+setTimeout(() =&gt; {
+  console.log(useA);
+}, 200);
+</code></pre>
+<p>在第五个中，代码可以简化为：</p>
+<pre><code class="language-js">const CModule = {
+  exports: {},
+};
+
+setTimeout(() =&gt; {
+  CModule.exports.val = 101;
+}, 100);
+
+CModule.exports.val = 1;
+
+const useA = CModule.exports;
+
+console.log(useA);
+
+setTimeout(() =&gt; {
+  console.log(useA);
+}, 200);
+</code></pre>
+<p>我们运行一下上面的代码，发现和 CommonJS 输出的结果一致。所以 CommonJS 依旧是日常写的最简单的 JS 代码。</p>
+<p>其值拷贝发生在给 module.exports 赋值的那一刻，例如：</p>
+<pre><code class="language-js">let val = 1;
+module.exports = {
+  val,
+};
+</code></pre>
+<p>作用是给 module.exports 赋予了一个新的对象，在这个对象里有一个 key 叫做 val，这个 val 的值是当前模块中 val 的值，仅此而已。</p>
+<h2>CommonJS 的具体实现</h2>
+<p>为了更透彻的了解 CommonJS，我们来写一个简单的模块加载器，主要参考了 nodejs 源码；</p>
+<p>在 node v16.x 中 module 主要实现在 lib/internal/modules/cjs/loader.js 文件下。</p>
+<p>在 node v4.x 中 module 主要实现在 lib/module.js 文件下。</p>
+<p>下面的实现主要参考了 node v4.x 中的实现，因为老版本相对更“干净”一些，更容易抓住细节。</p>
+<p>另外 深入 Node.js 的模块加载机制，手写 require 函数 这篇文章写的也很不错，下面的实现很多也参考了这篇文章。</p>
+<p>为了跟官方 Module 名字区分开，我们自己的类命名为 CModule：</p>
+<pre><code class="language-js">function CModule(id = &quot;&quot;) {
+  this.id = id; // 模块路径
+  this.exports = {}; // 导出的东西放这里，初始化为空对象
+  this.loaded = false; // 用来标识当前模块是否已经加载
+}
+</code></pre>
+<h3>require 方法</h3>
+<p>我们一直用的 require 其实是 Module 类的一个实例方法，内容很简单，先做一些参数检查，然后调用 Module.load 方法，源码在这里，本示例为了简洁，去掉了一些判断：</p>
+<pre><code class="language-js">CModule.prototype.require = function (id) {
+  return CModule._load(id);
+};
+</code></pre>
+<p>require 是一个简单的函数，主要是包装了 load 这个函数，主要作用是：</p>
+<ul>
+<li>
+<p>先检查请求的模块在缓存中是否已经存在了，如果存在了直接返回缓存模块的 exports</p>
+</li>
+<li>
+<p>如果不在缓存中，就创建一个 Module 实例，将该实例放到缓存中，用这个实例加载对应的模块，并返回模块的 exports</p>
+</li>
+</ul>
+<pre><code class="language-js">CModule._load = function (request) {
+  // request是传入的路径
+  const filename = CModule._resolveFilename(request);
+
+  // 先检查缓存，如果缓存存在且已经加载，直接返回缓存
+  const cachedModule = CModule._cache[filename];
+  if (cachedModule) {
+    return cachedModule.exports;
+  }
+
+  // 如果缓存不存在，我们就加载这个模块
+  constmodule = newCModule(filename);
+
+  // load之前就将这个模块缓存下来，这样如果有循环引用就会拿到这个缓存，但是这个缓存里面的exports可能还没有或者不完整
+  CModule._cache[filename] = module;
+
+  // 如果 load 失败，需要将 _cache 中相应的缓存删掉。这里简单起见，不做这个处理
+  module.load(filename);
+
+  returnmodule.exports;
+};
+</code></pre>
+<p>可以看到上述源码还调用了两个方法：CModule.resolveFilename 和 CModule.prototype.load，下面我们来实现下这两个方法。</p>
+<h3>CModule.resolveFilename</h3>
+<p>这个函数的作用是通过用户传入的 require 参数来解析到真正的文件地址，源码中这个方法比较复杂，因为他要支持多种参数：内置模块，相对路径，绝对路径，文件夹和第三方模块等等。</p>
+<p>本示例为了简洁，只实现相对文件的导入：</p>
+<pre><code class="language-js">CModule._resolveFilename = function (request) {
+  returnpath.resolve(request);
+};
+</code></pre>
+<h3>CModule.prototype.load</h3>
+<p>CModule.prototype.load 是一个实例方法，源代码在这里，这个方法就是真正用来加载模块的方法，这其实也是不同类型文件加载的一个入口，不同类型的文件会对应 CModule.extensions 里面的一个方法：</p>
+<pre><code class="language-js">CModule.prototype.load = function (filename) {
+  // 获取文件后缀名
+  const extname = path.extname(filename);
+
+  // 调用后缀名对应的处理函数来处理，当前实现只支持 JS
+  CModule._extensions[extname](this, filename);
+
+  this.loaded = true;
+};
+</code></pre>
+<h3>加载文件: CModule.extensions['X']</h3>
+<p>前面提到不同文件类型的处理方法都挂载在 CModule.extensions 上，事实上 node 的加载器不仅仅可以加载 .js 模块，也可以加载 .json 和 .node 模块。本示例简单起见仅实现 .js 类型文件的加载：</p>
+<pre><code class="language-js">CModule._extensions[&quot;.js&quot;] = function (module, filename) {
+  const content = fs.readFileSync(filename, &quot;utf8&quot;);
+  module._compile(content, filename);
+};
+</code></pre>
+<p>可以看到 js 的加载方法很简单，只是把文件内容读出来，然后调了另外一个实例方法 compile 来执行他。对应的源码在这里。</p>
+<h3>compile 实现</h3>
+<p>CModule.prototype.compile 是加载 JS 文件的核心所在，这个方法需要将目标文件拿出来执行一遍。对应的源码在这里。</p>
+<p>compile 主要做了如下事情：</p>
+<p>1、执行之前需要将它整个代码包裹一层，以便注入 exports, require, module, **dirname, **filename，这也是我们能在 JS 文件里面直接使用这几个变量的原因。要实现这种注入也不难，假如我们 require 的文件是一个简单的 Hello World，长这样：</p>
+<pre><code class="language-js">module.exports = &quot;hello world&quot;;
+</code></pre>
+<p>那我们怎么来给他注入 module 这个变量呢？答案是执行的时候在他外面再加一层函数，使他变成这样：</p>
+<pre><code class="language-js">function (module) { // 注入module变量，其实几个变量同理
+  module.exports = &quot;hello world&quot;;
+}
+</code></pre>
+<p>nodeJS 也是这样实现的，在 node 源码里，会有这样的代码：</p>
+<pre><code class="language-js">NativeModule.wrap = function (script) {
+  return NativeModule.wrapper[0] + script + NativeModule.wrapper[1];
+};
+
+NativeModule.wrapper = [
+  &quot;(function (exports, require, module, __filename, __dirname) { &quot;,
+  &quot;\n});&quot;,
+];
+</code></pre>
+<p>这样通过 CModule.wrap 包装的代码就可以获取到 exports, require, module, **filename, **dirname 这几个变量了。</p>
+<p>2、放入沙盒里执行包装好的代码，并返回模块的 export。沙盒执行使用了 node 的 vm 模块。</p>
+<p>在本实现中，compile 实现如下：</p>
+<pre><code class="language-js">CModule.prototype._compile = function (content, filename) {
+  var self = this;
+  // 获取包装后函数体
+  const wrapper = CModule.wrap(content);
+
+  // vm是nodejs的虚拟机沙盒模块，runInThisContext方法可以接受一个字符串并将它转化为一个函数
+  // 返回值就是转化后的函数，所以compiledWrapper是一个函数
+  const compiledWrapper = vm.runInThisContext(wrapper, {
+    filename,
+  });
+  const dirname = path.dirname(filename);
+
+  const args = [self.exports, self.require, self, filename, dirname];
+  return compiledWrapper.apply(self.exports, args);
+};
+</code></pre>
+<p>wrapper 和 warp 的实现如下：</p>
+<pre><code class="language-js">CModule.wrapper = [
+  &quot;(function (CExports, CRequire, CModule, __filename, __dirname) { &quot;,
+  &quot;\n});&quot;,
+];
+
+CModule.wrap = function (script) {
+  return CModule.wrapper[0] + script + CModule.wrapper[1];
+};
+</code></pre>
+<p>注意上面的 wrapper 中我们使用了 CRequire 和 CModule 来区分原生的 require 和 module, 下面的例子中我们会使用自己实现的函数来加载文件。</p>
+<h3>最后生成一个实例并导出</h3>
+<p>最后我们 new 一个 CModule 的实理并导出，方便外面使用：</p>
+<pre><code class="language-js">const CModuleInstance = new CModule();
+const CRequire = (id) =&gt; {
+  return CModuleInstance.require(id);
+};
+
+module.exports = {
+  CModule,
+  CRequire,
+};
+</code></pre>
+<h3>完整代码</h3>
+<p>最后的完整代码如下：</p>
+<pre><code class="language-js">const path = require(&quot;path&quot;);
+const vm = require(&quot;vm&quot;);
+const fs = require(&quot;fs&quot;);
+
+function CModule(id = &quot;&quot;) {
+  this.id = id; // 模块路径
+  this.exports = {}; // 导出的东西放这里，初始化为空对象
+  this.loaded = false; // 用来标识当前模块是否已经加载
+}
+
+CModule._cache = {};
+CModule._extensions = {};
+
+CModule.wrapper = [
+  &quot;(function (CExports, CRequire, CModule, __filename, __dirname) { &quot;,
+  &quot;\n});&quot;,
+];
+
+CModule.wrap = function (script) {
+  return CModule.wrapper[0] + script + CModule.wrapper[1];
+};
+
+CModule.prototype.require = function (id) {
+  return CModule._load(id);
+};
+
+CModule._load = function (request) {
+  // request是传入的路径
+  const filename = CModule._resolveFilename(request);
+
+  // 先检查缓存，如果缓存存在且已经加载，直接返回缓存
+  const cachedModule = CModule._cache[filename];
+  if (cachedModule) {
+    return cachedModule.exports;
+  }
+
+  // 如果缓存不存在，我们就加载这个模块
+  // 加载前先new一个CModule实例，然后调用实例方法load来加载
+  // 加载完成直接返回module.exports
+  const module = new CModule(filename);
+
+  // load之前就将这个模块缓存下来，这样如果有循环引用就会拿到这个缓存，但是这个缓存里面的exports可能还没有或者不完整
+  CModule._cache[filename] = module;
+
+  // 如果 load 失败，需要将 _cache 中相应的缓存删掉。这里简单起见，不做这个处理
+  module.load(filename);
+
+  return module.exports;
+};
+
+CModule._resolveFilename = function (request) {
+  return path.resolve(request);
+};
+
+CModule.prototype.load = function (filename) {
+  // 获取文件后缀名
+  const extname = path.extname(filename);
+
+  // 调用后缀名对应的处理函数来处理，当前实现只支持 JS
+  CModule._extensions[extname](this, filename);
+
+  this.loaded = true;
+};
+
+CModule._extensions[&quot;.js&quot;] = function (module, filename) {
+  var content = fs.readFileSync(filename, &quot;utf8&quot;);
+  module._compile(content, filename);
+};
+
+CModule.prototype._compile = function (content, filename) {
+  var self = this;
+  // 获取包装后函数体
+  const wrapper = CModule.wrap(content);
+
+  // vm是nodejs的虚拟机沙盒模块，runInThisContext方法可以接受一个字符串并将它转化为一个函数
+  // 返回值就是转化后的函数，所以compiledWrapper是一个函数
+  const compiledWrapper = vm.runInThisContext(wrapper, {
+    filename,
+  });
+  const dirname = path.dirname(filename);
+
+  const args = [self.exports, self.require, self, filename, dirname];
+  return compiledWrapper.apply(self.exports, args);
+};
+
+const CModuleInstance = new CModule();
+const CRequire = (id) =&gt; {
+  return CModuleInstance.require(id);
+};
+
+module.exports = {
+  CModule,
+  CRequire,
+};
+</code></pre>
+<h2>源代码中的 require 是如何实现的?</h2>
+<p>细心的你可能会发现： nodejs v4.x 源码中实现 require 的文件 lib/module.js 中，也使用到了 require 函数。</p>
+<p>这似乎产生是先有鸡还是先有蛋的悖论，我还没把你造出来，你怎么就用起来了？</p>
+<p>事实上，源码中的 require 有另外简单的实现，它被定义在 src/node.js 中，源码在这里。</p>
+<h2>用自定义的 CModule 来加载文件</h2>
+<p>刚刚我们实现了一个简单的 Module，但是能不能正常用还存疑。是骡子是马拉出来遛遛，我们用自己的 CModule 来加载文件，看看能不能正常运行。</p>
+<p>可以查看 demos/01，代码的入口为 app.js:</p>
+<pre><code class="language-js">const { CRequire } = require(&quot;./CModule.js&quot;);
+
+CRequire(&quot;./b.js&quot;);
+</code></pre>
+<p>b.js 的代码如下：</p>
+<pre><code class="language-js">const { obj, setVal } = CRequire(&quot;./a.js&quot;);
+
+console.log(obj);
+
+setVal(101);
+
+console.log(obj);
+</code></pre>
+<p>可以看到现在我们用 CRequire 取代 require 来加载 ./a.js 模块。</p>
+<p>再看看 ./a.js 的代码：</p>
+<pre><code class="language-js">let obj = {
+  val: 1,
+};
+
+const setVal = (newVal) =&gt; {
+  obj.val = newVal;
+};
+
+CModule.exports = {
+  obj,
+  setVal,
+};
+</code></pre>
+<p>可以看到现在我们用 CModule 取代 module 来导出模块。</p>
+<p>最后执行 node app.js 查看运行结果：</p>
+<pre><code class="language-js">{
+  val: 1;
+}
+
+{
+  val: 101;
+}
+</code></pre>
+<p>可以看到最终效果和使用原生的 module 模块一致。</p>
+<h2>用自定义的 CModule 来测试循环引用</h2>
+<p>在这之前，我们先看看原生的 module 模块的循环引用会发生什么异常。可以查看 demos/02，代码的入口为 app.js：</p>
+<pre><code class="language-js">require(&quot;./a.js&quot;);
+</code></pre>
+<p>看看 ./a.js 的代码：</p>
+<pre><code class="language-js">const { b, setB } = require(&quot;./b.js&quot;);
+
+console.log(&quot;running a.js&quot;);
+
+console.log(&quot;b val&quot;, b);
+
+console.log(&quot;setB to bb&quot;);
+
+setB(&quot;bb&quot;);
+
+let a = &quot;a&quot;;
+
+const setA = (newA) =&gt; {
+  a = newA;
+};
+
+module.exports = {
+  a,
+  setA,
+};
+</code></pre>
+<p>再看看 ./b.js 的代码：</p>
+<pre><code class="language-js">const { a, setA } = require(&quot;./a.js&quot;);
+
+console.log(&quot;running b.js&quot;);
+
+console.log(&quot;a val&quot;, a);
+
+console.log(&quot;setA to aa&quot;);
+
+setA(&quot;aa&quot;);
+
+let b = &quot;b&quot;;
+
+const setB = (newB) =&gt; {
+  b = newB;
+};
+
+module.exports = {
+  b,
+  setB,
+};
+</code></pre>
+<p>可以看到 ./a.js 和 ./b.js 在文件的开头都相互引用了对方。</p>
+<p>执行 node app.js 查看运行结果：</p>
+<pre><code class="language-bash">running b.js
+a val undefined
+setA to aa
+/demos/02/b.js:9
+setA('aa')
+^
+
+TypeError: setA is not a function
+    at Object.&lt;anonymous&gt; (/demos/02/b.js:9:1)
+    at xxx
+</code></pre>
+<p>我们会发现一个 TypeError 的异常报错，提示 setA is not a function。这样的异常在预期之内，我们再试试自己实现的 CModule 的异常是否和原生 module 的行为一致。</p>
+<p>我们查看 demos/03，这里我们用自己的 CModule 来复现上面的循环引用，代码的入口为 app.js：</p>
+<pre><code class="language-js">const { CRequire } = require('./CModule.js');
+
+CRequire('./a.js');
+a.js 的代码如下：
+
+const { b, setB } = CRequire('./b.js');
+
+console.log('running a.js');
+
+console.log('b val', b);
+
+console.log('setB to bb');
+
+setB('bb')
+
+let a = 'a';
+
+const setA = (newA) =&gt; {
+    a = newA;
+}
+
+CModule.exports = {
+    a,
+    setA
+}
+</code></pre>
+<p>再看看 ./b.js 的代码：</p>
+<pre><code class="language-js">const { a, setA } = CRequire(&quot;./a.js&quot;);
+
+console.log(&quot;running b.js&quot;);
+
+console.log(&quot;a val&quot;, a);
+
+console.log(&quot;setA to aa&quot;);
+
+setA(&quot;aa&quot;);
+
+let b = &quot;b&quot;;
+
+const setB = (newB) =&gt; {
+  b = newB;
+};
+
+CModule.exports = {
+  b,
+  setB,
+};
+</code></pre>
+<p>可以看到现在我们用 CRequire 取代了 require，用 CModule 取代了 module。</p>
+<p>最后执行 node app.js 查看运行结果：</p>
+<pre><code class="language-bash">running b.js
+a val undefined
+setA to aa
+/demos/03/b.js:9
+setA('aa')
+^
+
+TypeError: setA is not a function
+at Object.&lt;anonymous&gt; (/demos/03/b.js:9:1)
+at xxx
+</code></pre>
+<p>可以看到，CModule 的行为和原生 Module 处理循环引用的异常是一致的。</p>
+<h2>为什么 CommonJS 相互引用没有产生类似“死锁”的问题？</h2>
+<p>我们可以发现 CommonJS 模块相互引用时，没有产生类似死锁的问题。关键在 Module.load 函数里，具体源代码在这里。Module.load 函数主要做了下面这些事情：</p>
+<ul>
+<li>
+<p>检查缓存，如果缓存存在且已经加载，直接返回缓存，不做下面的处理</p>
+</li>
+<li>
+<p>如果缓存不存在，新建一个 Module 实例</p>
+</li>
+<li>
+<p>将这个 Module 实例放到缓存中</p>
+</li>
+<li>
+<p>通过这个 Module 实例来加载文件</p>
+</li>
+<li>
+<p>返回这个 Module 实例的 exports</p>
+</li>
+</ul>
+<p>其中的关键在 放到缓存中 与 加载文件 的顺序，在我们的 CModule 中，也就是这两行代码：</p>
+<pre><code class="language-js">CModule._cache[filename] = module;
+module.load(filename);
+</code></pre>
+<p>回到上面循环加载的例子中，解释一下到底发生了什么：</p>
+<p>当 app.js 加载 a.js 时，Module 会检查缓存中有没有 a.js，发现没有，于是 new 一个 a.js 模块，并将这个模块放到缓存中，再去加载 a.js 文件本身。</p>
+<p>在加载 a.js 文件时，Module 发现第一行是加载 b.js，它会检查缓存中有没有 b.js，发现没有，于是 new 一个 b.js 模块，并将这个模块放到缓存中，再去加载 b.js 文件本身。</p>
+<p>在加载 b.js 文件时，Module 发现第一行是加载 a.js，它会检查缓存中有没有 a.js，发现存在，于是 require 函数返回了缓存中的 a.js。</p>
+<p>但是其实这个时候 a.js 根本还没有执行完，还没走到 module.exports 那一步，所以 b.js 中 require('./a.js') 返回的只是一个默认的空对象。所以最终会报 setA is not a function 的异常。</p>
+<p>说到这里，那如何设计会导致“死锁”呢？其实也很简单 —— 将 放到缓存中 与 加载文件 的执行顺序互换，在我们的 CModule 代码中，也就是这样写：</p>
+<pre><code class="language-js">module.load(filename);
+CModule._cache[filename] = module;
+</code></pre>
+<p>这样互换一下，再执行 demo03，我们发现异常如下：</p>
+<pre><code class="language-bash">RangeError: Maximum call stack size exceeded
+    at console.value (node:internal/console/constructor:290:13)
+    at console.log (node:internal/console/constructor:360:26)
+</code></pre>
+<p>我们发现这样写会死锁，最终导致 JS 报栈溢出异常。</p>
+<h2>JavaScript 的执行过程</h2>
+<p>接下来我们要讲解 ESM 的模块导入，为了方便理解 ESM 的模块导入，这里需要补充一个知识点 —— JavaScript 的执行过程。</p>
+<p>JavaScript 执行过程分为两个阶段:</p>
+<ul>
+<li>
+<p>编译阶段</p>
+</li>
+<li>
+<p>执行阶段</p>
+</li>
+</ul>
+<h3>编译阶段</h3>
+<p>在编译阶段 JS 引擎主要做了三件事：</p>
+<ul>
+<li>
+<p>词法分析</p>
+</li>
+<li>
+<p>语法分析</p>
+</li>
+<li>
+<p>字节码生成</p>
+</li>
+</ul>
+<p>这里不详情讲这三件事的具体细节，感兴趣你可以阅读 the-super-tiny-compiler 这个仓库，它通过几百行的代码实现了一个微形编译器，并详细讲了这三个过程的具体细节。</p>
+<h3>执行阶段</h3>
+<p>在执行阶段，会分情况创建各种类型的执行上下文，例如：全局执行上下文 (只有一个)、函数执行上下文。而执行上下文的创建分为两个阶段：</p>
+<ul>
+<li>
+<p>创建阶段</p>
+</li>
+<li>
+<p>执行阶段</p>
+</li>
+</ul>
+<p>在创建阶段会做如下事情：</p>
+<ul>
+<li>
+<p>绑定 this</p>
+</li>
+<li>
+<p>为函数和变量分配内存空间</p>
+</li>
+<li>
+<p>初始化相关变量为 undefined</p>
+</li>
+</ul>
+<p>我们日常提到的 变量提升 和 函数提升 就是在 创建阶段 做的，所以下面的写法并不会报错：</p>
+<pre><code class="language-js">console.log(msg);
+add(1,2)
+
+var msg = 'hello'
+functionadd(a,b){
+    return a + b;
+}
+</code></pre>
+<p>因为在执行之前的创建阶段，已经分配好了 msg 和 add 的内存空间。</p>
+<h2>JavaScript 的常见报错类型</h2>
+<p>为了更容易理解 ESM 的模块导入，这里再补充一个知识点 —— JavaScript 的常见报错类型。</p>
+<h3>1、RangeError</h3>
+<p>这类错误很常见，例如栈溢出就是 RangeError；</p>
+<pre><code class="language-js">functiona () {
+    b()
+}
+functionb () {
+    a()
+}
+a()
+
+// out:
+// RangeError: Maximum call stack size exceeded
+</code></pre>
+<h3>2、ReferenceError</h3>
+<p>ReferenceError 也很常见，打印一个不存在的值就是 ReferenceError：</p>
+<pre><code class="language-js">hello;
+
+// out:
+// ReferenceError: hello is not defined
+</code></pre>
+<h3>3、SyntaxError</h3>
+<p>SyntaxError 也很常见，当语法不符合 JS 规范时，就会报这种错误：</p>
+<pre><code class="language-js">console.log(1));
+
+// out:
+// console.log(1));
+// ^
+// SyntaxError: Unexpected token ')'
+</code></pre>
+<h3>4、TypeError</h3>
+<p>TypeError 也很常见，当一个基础类型当作函数来用时，就会报这个错误：</p>
+<pre><code class="language-js">vara = 1;
+a();
+
+// out:
+// TypeError: a is not a function
+</code></pre>
+<p>上面的各种 Error 类型中，SyntaxError 最为特殊，因为它是 编译阶段 抛出来的错误，如果发生语法错误，JS 代码一行都不会执行。而其他类型的异常都是 执行阶段 的错误，就算报错，也会执行异常之前的脚本。</p>
+<h2>什么叫 编译时输出接口? 什么叫 运行时加载?</h2>
+<p>ESM 之所以被称为 编译时输出接口，是因为它的模块解析是发生在 编译阶段。</p>
+<p>也就是说，import 和 export 这些关键字是在编译阶段就做了模块解析，这些关键字的使用如果不符合语法规范，在编译阶段就会抛出语法错误。</p>
+<p>例如，根据 ES6 规范，import 只能在模块顶层声明，所以下面的写法会直接报语法错误，不会有 log 打印，因为它压根就没有进入 执行阶段：</p>
+<pre><code class="language-js">console.log(&quot;hello world&quot;);
+
+if (true) {
+  import { resolve } from &quot;path&quot;;
+}
+
+// out:
+// import { resolve } from 'path';
+// ^
+// SyntaxError: Unexpected token '{'
+</code></pre>
+<p>与此对应的 CommonJS，它的模块解析发生在 执行阶段，因为 require 和 module 本质上就是个函数或者对象，只有在 执行阶段 运行时，这些函数或者对象才会被实例化。因此被称为 运行时加载。</p>
+<p>这里要特别强调，与 CommonJS 不同，ESM 中 import 的不是对象， export 的也不是对象。例如，下面的写法会提示语法错误：</p>
+<pre><code class="language-js">// 语法错误！这不是解构！！！
+import { a: CA } from './a.mjs'
+
+// 语法错误！
+export {
+    a: &quot;a&quot;
+}
+</code></pre>
+<p>import 和 export 的用法很像导入一个对象或者导出一个对象，但这和对象完全没有关系。他们的用法是 ECMAScript 语言层面的设计的，并且“恰巧”的对象的使用类似。</p>
+<p>所以在编译阶段，import 模块中引入的值就指向了 export 中导出的值。如果了解 linux，这就有点像 linux 中的硬链接，指向同一个 inode。或者拿栈和堆来比喻，这就像两个指针指向了同一个栈。</p>
+<h2>ESM 的加载细节</h2>
+<p>在讲解 ESM 的加载细节之前，我们要了解 ESM 中也存在 变量提升 和 函数提升 ，意识到这一点非常重要。</p>
+<p>拿前面 demos/02 中提到的循环引用举例子，将其改造为 ESM 版的循环引用，查看 demos/04，代码的入口为 app.js：</p>
+<pre><code class="language-js">import &quot;./a.mjs&quot;;
+</code></pre>
+<p>看看 ./a.mjs 的代码：</p>
+<pre><code class="language-js">import { b, setB } from &quot;./b.mjs&quot;;
+
+console.log(&quot;running a.mjs&quot;);
+
+console.log(&quot;b val&quot;, b);
+
+console.log(&quot;setB to bb&quot;);
+
+setB(&quot;bb&quot;);
+
+let a = &quot;a&quot;;
+
+constsetA = (newA) =&gt; {
+  a = newA;
+};
+
+export { a, setA };
+</code></pre>
+<p>再看看 ./b.mjs 的代码：</p>
+<pre><code class="language-js">import { a, setA } from &quot;./a.mjs&quot;;
+
+console.log(&quot;running b.mjs&quot;);
+
+console.log(&quot;a val&quot;, a);
+
+console.log(&quot;setA to aa&quot;);
+
+setA(&quot;aa&quot;);
+
+let b = &quot;b&quot;;
+
+constsetB = (newB) =&gt; {
+  b = newB;
+};
+
+export { b, setB };
+</code></pre>
+<p>可以看到 ./a.mjs 和 ./b.mjs 在文件的开头都相互引用了对方。</p>
+<p>执行 node app.mjs 查看运行结果：</p>
+<pre><code class="language-bash">running b.mjs
+file:///demos/04/b.mjs:5
+console.log('a val', a);
+^
+
+ReferenceError: Cannot access 'a' before initialization
+at file:///demos/04/b.mjs:5:22
+</code></pre>
+<p>我们会发现一个 ReferenceError 的异常报错，提示不能在初始化之前使用变量。这是因为我们使用了 let 定义变量，使用了 const 定义函数，导致无法做变量和函数提升。</p>
+<p>怎么修改才能正常运行呢？其实很简单：用 var 代替 let，使用 function 来定义函数，我们查看 demos/05 来看效果：</p>
+<p>看看 ./a.mjs 的代码：</p>
+<pre><code class="language-js">console.log('b val', b);
+
+console.log('setB to bb');
+
+setB('bb')
+
+var a = 'a';
+
+functionsetA(newA) {
+    a = newA;
+}
+
+export {
+    a,
+    setA
+}
+</code></pre>
+<p>再看看 ./b.mjs 的代码：</p>
+<pre><code class="language-js">import { a, setA } from'./a.mjs';
+
+console.log('running b.mjs');
+
+console.log('a val', a);
+
+console.log('setA to aa');
+
+setA('aa')
+
+var b = 'b';
+
+functionsetB(newB) {
+    b = newB;
+}
+
+export {
+    b,
+    setB
+}
+</code></pre>
+<p>执行 node app.mjs 查看运行结果：</p>
+<pre><code class="language-bash">running b.mjs
+a val undefined
+setA to aa
+running a.mjs
+b val b
+setB to bb
+</code></pre>
+<p>可以发现这样修改后可以正常执行，没有出现异常报错。</p>
+<p>写到这里我们可以详细谈谈 ESM 的加载细节了，它其实和前面提到的 CommonJS 的 Module.load 函数做的事情有些类似：</p>
+<ul>
+<li>
+<p>检查缓存，如果缓存存在且已经加载，则直接从缓存模块中提取相应的值，不做下面的处理</p>
+</li>
+<li>
+<p>如果缓存不存在，新建一个 Module 实例</p>
+</li>
+<li>
+<p>将这个 Module 实例放到缓存中</p>
+</li>
+<li>
+<p>通过这个 Module 实例来加载文件</p>
+</li>
+<li>
+<p>加载文件后到全局执行上下文时，会有创建阶段和执行阶段，在创建阶段做函数和变量提升，接着执行代码。</p>
+</li>
+<li>
+<p>返回这个 Module 实例的 exports</p>
+</li>
+</ul>
+<p>结合 demos/05 的循环加载，我们再做一个详细的解释：</p>
+<p>当 app.mjs 加载 a.mjs 时，Module 会检查缓存中有没有 a.mjs，发现没有，于是 new 一个 a.mjs 模块，并将这个模块放到缓存中，再去加载 a.mjs 文件本身。</p>
+<p>在加载 a.mjs 文件时，在 创建阶段 会为全局上下文中的函数 setA 和 变量 a 分配内存空间，并初始化变量 a 为 undefined。在执行阶段，发现第一行是加载 b.mjs，它会检查缓存中有没有 b.mjs，发现没有，于是 new 一个 b.mjs 模块，并将这个模块放到缓存中，再去加载 b.mjs 文件本身。</p>
+<p>在加载 b.mjs 文件时，在 创建阶段 会为全局上下文中的函数 setB 和 变量 b 分配内存空间，并初始化变量 b 为 undefined。在执行阶段,发现第一行是加载 a.mjs，它会检查缓存中有没有 a.mjs，发现存在，于是 import 返回了缓存中 a.mjs 导出的相应的值。</p>
+<p>虽然这个时候 a.mjs 根本还没有执行过，但是它的 创建阶段 已经完成了，即在内存中也已经存在了 setA 函数和值为 undefined 的变量 a。所以这时候在 b.mjs 里可以正常打印 a 并使用 setA 函数而没有异常抛错。</p>
+<h2>再谈 ESM 和 CommonJS 的区别</h2>
+<p><strong>不同点：this 的指向不同</strong></p>
+<p>CommonJS 的 this 指向可以查看源码：</p>
+<pre><code class="language-js">var args = [self.exports, require, self, filename, dirname];
+return compiledWrapper.apply(self.exports, args);
+</code></pre>
+<p>很清楚的可以看到 this 指向的是当前 module 的默认 exports；</p>
+<p>而 ESM 由于语言层面的设计指向的是 undefined。</p>
+<p><strong>不同点：filename，dirname 在 CommonJS 中存在，在 ESM 中不存在</strong></p>
+<p>在 CommonJS 中，模块的执行需要用函数包起来，并指定一些常用的值</p>
+<pre><code class="language-js">NativeModule.wrapper = [
+  &quot;(function (exports, require, module, __filename, __dirname) { &quot;,
+  &quot;\n});&quot;,
+];
+</code></pre>
+<p>所以我们全局才可以直接用 **filename、**dirname。而 ESM 没有这方面的设计，所以在 ESM 中不能直接使用 **filename 和 **dirname。</p>
+<p><strong>相同点：ESM 和 CommonJS 都有缓存</strong></p>
+<p>这一点两种模块方案一致，都会缓存模块，模块加载一次后会缓存起来，后续再次加载会用缓存里的模块。</p>
+]]></content:encoded>
+            <author>cwzp990@gmail.com (Juzi)</author>
+        </item>
+        <item>
+            <title><![CDATA[删除数组重复项]]></title>
+            <link>https://www.cwzp990.top/posts/leetcode.duplicates.html</link>
+            <guid>https://www.cwzp990.top/posts/leetcode.duplicates.html</guid>
+            <pubDate>Mon, 22 May 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[leetcode]]></description>
+            <content:encoded><![CDATA[<h3>前言</h3>
+<p>最近面试有一道题，实现数组去除重复项再求和，我一开始以为是数组去重，但是面试官说是删除，对于这个从不刷 leetcode 的我，只能暴力解，面试结束之后发现有更好的解决方案。</p>
+<h3>leetcode</h3>
+<p>给你一个 升序排列 的数组 nums ，请你 原地 删除重复出现的元素，使每个元素 只出现一次 ，返回删除后数组的新长度。元素的 相对顺序 应该保持 一致 。然后返回 nums 中唯一元素的个数。</p>
+<p>考虑 nums 的唯一元素的数量为 k ，你需要做以下事情确保你的题解可以被通过：</p>
+<ul>
+<li>
+<p>更改数组 nums ，使 nums 的前 k 个元素包含唯一元素，并按照它们最初在 nums 中出现的顺序排列。nums 的其余元素与 nums 的大小不重要。</p>
+</li>
+<li>
+<p>返回 k 。</p>
+</li>
+</ul>
+<p><strong>判题标准:</strong></p>
+<p>系统会用下面的代码来测试你的题解:</p>
+<pre><code class="language-js">int[] nums = [...]; // 输入数组
+int[] expectedNums = [...]; // 长度正确的期望答案
+
+int k = removeDuplicates(nums); // 调用
+
+assert k == expectedNums.length;
+for (int i = 0; i &lt; k; i++) {
+    assert nums[i] == expectedNums[i];
+}
+</code></pre>
+<p><strong>示例 1：</strong></p>
+<pre><code>输入：nums = [1,1,2]
+输出：2, nums = [1,2,_]
+解释：函数应该返回新的长度 2 ，并且原数组 nums 的前两个元素被修改为 1, 2 。不需要考虑数组中超出新长度后面的元素。
+</code></pre>
+<p><strong>示例 2：</strong></p>
+<pre><code>输入：nums = [0,0,1,1,1,2,2,3,3,4]
+输出：5, nums = [0,1,2,3,4]
+解释：函数应该返回新的长度 5 ， 并且原数组 nums 的前五个元素被修改为 0, 1, 2, 3, 4 。不需要考虑数组中超出新长度后面的元素。
+</code></pre>
+<p><strong>提示：</strong></p>
+<pre><code>1 &lt;= nums.length &lt;= 3 \* 104
+-104 &lt;= nums[i] &lt;= 104
+nums 已按 升序 排列
+</code></pre>
+<h3>算法分析</h3>
+<blockquote>
+<p>该方案利用双指针的方式，定义两个指针(low 初值 0,fast 初值 1)，当两指针所指元素相同时，将 fast 指针继续向右移动直至遇到不同元素时(此时 low 与 fast 则会拉开一个区间，该区间的元素则为需要删除的相同的元素)，将 low 指针向右移动一位，并将其赋值为 fast 指针所指元素(此时 0 到 low 指针所在区间的元素则是不重复的元素)，当 fast 指针超出数组范围则终止循环，此时 low 位置+1 则为去重后数组长度。</p>
+</blockquote>
+<pre><code class="language-js">/*
+ * @description: 双指针   TC:O(n)  SC:O(1)
+ * @param {*} nums 输入数组
+ * @return {*}
+ */
+function doublePoint(nums) {
+  // 如果数组长度不大于1，无需去重直接返回即可
+  if (nums.length &lt;= 1) return nums.length;
+  // 定义两个指针
+  let fastPoint = 1,
+    lowPoint = 0;
+  // 当fast指针超出数组范围则终止循环
+  while (fastPoint &lt; nums.length) {
+    // 当两指针所指元素不同
+    if (nums[lowPoint] != nums[fastPoint]) {
+      // 将low指针向右移动一位
+      lowPoint++;
+      // 并将其赋值为fast指针所指元素
+      nums[lowPoint] = nums[fastPoint];
+    }
+    // 继续移动fast指针
+    fastPoint++;
+  }
+  return lowPoint + 1;
+}
+</code></pre>
+]]></content:encoded>
+            <author>cwzp990@gmail.com (Juzi)</author>
+        </item>
+        <item>
+            <title><![CDATA[网络原理之传输层]]></title>
+            <link>https://www.cwzp990.top/posts/transport.html</link>
+            <guid>https://www.cwzp990.top/posts/transport.html</guid>
+            <pubDate>Sun, 02 Apr 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[tcp udp 三次握手 滑动窗口]]></description>
+            <content:encoded><![CDATA[<p>马上要参加计算机网络考试了，这里把一些考点梳理一下，希望能考一个好成绩。</p>
+<p>开放系统互联参考模型是由国际标准化组织（ISO）于 1984 年提出的分层网络体系结构模型，目的是支持<strong>异构网络系统</strong>的互联互通，是异构网络系统互联的<strong>国际标准</strong>，如图所示。我们这里讨论的传输层属于第四层。</p>
+<p><img src="../images/image-20210419153945177.png" alt="Image text"></p>
+<h3>一、传输层功能</h3>
+<p>给应用进程之间提供<strong>端到端</strong>的逻辑通信服务</p>
+<ol>
+<li>
+<p>传输层寻址；</p>
+</li>
+<li>
+<p>对应用层报文进行分段和重组；</p>
+</li>
+<li>
+<p>对报文进行差错检测；</p>
+</li>
+<li>
+<p>实现进程间端到端可靠数据传输控制；</p>
+</li>
+<li>
+<p>面向应用层实现复用与分解；</p>
+</li>
+<li>
+<p>实现端到端的流量控制；</p>
+</li>
+<li>
+<p>拥塞控制；</p>
+</li>
+</ol>
+<h3>二、传输层寻址与端口</h3>
+<p>一台计算机中，不同应用进程用<strong>进程标识符（进程 ID</strong>）来区分<br>
+在传输层使用协议端口号，通常简称为端口（port）<br>
+在全网范围内利用  <strong>『IP 地址+端口号』</strong>  唯一标识一个通信端点</p>
+<p>传输层端口号为 16 位整数，可以编号 65536 个（2 的 16 次方）<br>
+常用端口：<strong>端口号小于 256 的端口</strong></p>
+<table>
+<thead>
+<tr>
+<th>端口号</th>
+<th>类别</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0-1023</td>
+<td>熟知端口号</td>
+<td>服务器端口号</td>
+</tr>
+<tr>
+<td>1024-49151</td>
+<td>登记端口号</td>
+<td>服务器端口号</td>
+</tr>
+<tr>
+<td>49152-65535</td>
+<td>短暂端口号</td>
+<td>客户端口号</td>
+</tr>
+</tbody>
+</table>
+<h3>三、无连接服务与面向连接服务</h3>
+<table>
+<thead>
+<tr>
+<th>无连接服务（UDP）</th>
+<th>面向连接服务（TCP）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>提供无连接、不可靠的数据报传输服务</td>
+<td>提供面向连接的、可靠的、有序的字节流传输服务</td>
+</tr>
+<tr>
+<td>数据传输之前：无需与对端进行任何信息交换，直接构造传输层报文段并向接收端发送。</td>
+<td>数据传输之前：需要双方交换一些控制信息，建立逻辑连接，然后再传输数据，传输结束后还需要拆除连接</td>
+</tr>
+<tr>
+<td>类似于信件通信</td>
+<td>类似于电话通信</td>
+</tr>
+</tbody>
+</table>
+<h3>四、传输层的复用与分解</h3>
+<p>多路复用与多路分解（复用与分解 / 复用与分用）：支持众多应用进程共用同一个传输层协议，并能够将接收到的数据准确交付给不同的应用进程。</p>
+<ol>
+<li>
+<p>多路复用：在源主机，传输层协议从不同的套接字收集应用进程发送的数据块，并为每个数据块封装上首部信息（包括用于分解的信息）构成报文段，然后将报文段传递给网络层。</p>
+</li>
+<li>
+<p>多路分解：在目的主机，传输层协议读取报文段中的字段，标识出接收套接字，进而通过该套接字，将传输层的报文段中的数据交付给正确的套接字。</p>
+</li>
+</ol>
+<h3>五、停-等协议与滑动窗口协议</h3>
+<h4>1、可靠数据传输基本原理</h4>
+<p>不可靠传输信道在数据传输中可能发生：</p>
+<ul>
+<li>
+<p>比特差错： 1001 变为 1000；</p>
+</li>
+<li>
+<p>乱序： 数据块 1、2、5、6、3、4；</p>
+</li>
+<li>
+<p>数据丢失： 数据块 1、2、5；</p>
+</li>
+</ul>
+<p>为了使传输层提供可靠的数据传输服务，基于不可靠信道实现可靠数据传输需要采取以下措施：</p>
+<ul>
+<li>
+<p>差错检测： 利用编码实现数据包传输过程中的比特差错检测；</p>
+</li>
+<li>
+<p>确认： 接收方向发送方反馈接收状态；</p>
+<ul>
+<li>
+<p>NAK（ 否定确认），Negative Acknowledgement， 没有正确接收数据；</p>
+</li>
+<li>
+<p>ACK（ 肯定确认），Positive Acknowledgement， 正确接收数据；</p>
+</li>
+</ul>
+</li>
+<li>
+<p>重传： 发送方重新发送接收方没有正确接收的数据；</p>
+</li>
+<li>
+<p>序号： 确保数据按序提交；</p>
+</li>
+<li>
+<p>计时器： 解决数据丢失问题；</p>
+</li>
+</ul>
+<h4>2、停等协议</h4>
+<ol>
+<li>
+<p>发送方发送经过差错编码和编号的报文段， 等待接收方的确认；</p>
+</li>
+<li>
+<p>接收方如果差错检测无误且序号正确， 则接收报文段， 并向发送方发送 ACK，发送方收到 ACK，继续发送后续报文段；</p>
+</li>
+<li>
+<p>接收方如果差错检测序号有误，则丢弃报文段， 并向发送方发送 NAK，发送方收到 NAK， 重发刚刚发送的报文段。</p>
+</li>
+</ol>
+<p>停-等协议的缺点：<strong>性能差，信道利用率低</strong></p>
+<h4>3、滑动窗口协议</h4>
+<p><strong>流水线协议（管道协议）</strong>： 允许发送方在没有收到确认前连续发送多个分组。<br>
+最典型的流水线协议：<strong>滑动窗口协议</strong>。</p>
+<ol>
+<li>
+<p>增加分组序号。</p>
+</li>
+<li>
+<p>发送方和接收方可以缓存多个分组。</p>
+</li>
+</ol>
+<h5>① 回退 N 步协议（GBN 协议，Go-Back-N）</h5>
+<p><strong>GBN 协议的特点：</strong><br>
+发送端缓存能力高，可以在没有得到确认前发送多个分组。<br>
+接收端缓存能力很低，只能接收 1 个按序到达的分组，不能缓存未按序到达的分组。</p>
+<p><strong>GBN 发送方响应的 3 类事件：</strong></p>
+<ol>
+<li>上层调用</li>
+<li>收到 1 个 ACKn。GBN 采用累积确认方式，即发送方收到 ACKn 时，表明接收方正确接收序号 n 以及序号小于 n 的所有分组。</li>
+<li>计时器超时。发送方只使用一个计时器。</li>
+</ol>
+<h6>② 选择重传协议（SR 协议, Selective Repeat）</h6>
+<p><strong>SR 协议特点：</strong><br>
+发送端缓存能力高。<br>
+接收端缓存能力高，</p>
+<p><strong>SR 发送方响应事件：</strong></p>
+<ol>
+<li>上层调用。</li>
+<li>计时器超时。发送方对每个分组进行计时。</li>
+<li>收到 ACKn。SR 协议采取逐个确认方式</li>
+</ol>
+<h3>六、用户数据报协议（UDP）</h3>
+<p>提供无连接、不可靠、数据报尽力传输服务。</p>
+<h4>1、UDP 特点</h4>
+<ol>
+<li>应用进程容易控制发送什么数据以及何时发送，会出现分组的丢失和重复。</li>
+<li>无需建立连接。</li>
+<li>无连接状态。</li>
+<li>首部开销小，只有 8 个字节（Byte）。</li>
+</ol>
+<h4>2、UDP 数据报结构</h4>
+<h4>3、UDP 校验和</h4>
+<p><strong>提供差错检测功能</strong><br>
+UDP 的校验和用于检测 UDP 报文段从源到目的地传送过程中，其中的数据是否发生了改变。</p>
+<p><strong>UDP 校验和计算规则</strong></p>
+<ol>
+<li>
+<p>所有参与运算的内容按 16 位对其求和。</p>
+</li>
+<li>
+<p>求和过程中遇到溢出（即进位） 都被 回卷（即进位与和的最低位再相加）。</p>
+</li>
+<li>
+<p>最后得到的和取反码，就是 UDP 的校验和，填入 UDP 数据报的校验和字段。</p>
+</li>
+</ol>
+<h3>七、传输控制协议（TCP）</h3>
+<p>提供面向连接、可靠、有序、字节流传输服务。</p>
+<h4>1、TCP 报文段结构</h4>
+<h4>2、TCP 连接管理</h4>
+<p>以客户端上的一个应用进程与服务器上的一个应用进程建立一条 TCP 连接为例：</p>
+<h4>3、TCP 流量控制</h4>
+<p>流量控制：协调发送方与接收方的数据发送与接收速度。<br>
+在通信过程中，接收方设置报文段的接收窗口字段来将窗口大小通知给发送方</p>
+<h4>4、TCP 拥塞控制</h4>
+<p><strong>① 拥塞</strong></p>
+<p>太多的主机以太快的速度向网络中发送太多的数据，超出了网络处理能力，导致大量数据分组拥挤在中间设备队列中等待转发，网络性能显著下降的现象。</p>
+<p><strong>② 拥塞控制</strong></p>
+<p>通过合理调度、规范、调整向网络中发送数据的主机数量、发送速率、数据量，以避免拥塞或消除已发生的拥塞。</p>
+<ol>
+<li>
+<p>拥塞预防策：预防拥塞发送。<br>
+流量整形技术，规范主机向网络发送数据的流量。</p>
+</li>
+<li>
+<p>拥塞消除策略：基于拥塞检测机制，调整主机向网络中发送数据的速率和数量，从而逐渐消除拥塞。</p>
+</li>
+</ol>
+<p>③<strong>TCP 拥塞控制算法</strong></p>
+<ol>
+<li>
+<p>慢启动算法</p>
+</li>
+<li>
+<p>拥塞避免算法</p>
+</li>
+<li>
+<p>快速重传-计时器超时触发</p>
+</li>
+<li>
+<p>快速恢复-三次重复确认触发</p>
+</li>
+<li>
+<p>窗口调整的基本策略（Additive Increase, Multiplocative Decrease, AIMD）</p>
+</li>
+</ol>
+]]></content:encoded>
+            <author>cwzp990@gmail.com (Juzi)</author>
+        </item>
+        <item>
+            <title><![CDATA[React渲染流程]]></title>
+            <link>https://www.cwzp990.top/posts/react.render.html</link>
+            <guid>https://www.cwzp990.top/posts/react.render.html</guid>
+            <pubDate>Sun, 12 Mar 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[React Fiber]]></description>
+            <content:encoded><![CDATA[<h2>Fiber</h2>
+<p>React 的 JSX 最终会被编译为<code>React.createElement()</code>，这个函数执行结果是返回了一个<code>ReactElement()</code>，而每一个 elemnt 对应了一个 fiber 对象</p>
+<p><img src="../images/WX20230718-103418@2x.png" alt=""></p>
+<pre><code class="language-js">{
+    type:  // React.createElement 对应的type，表明这个fiber 节点对应的element
+    tag:  // 表明fiber 的类型
+    pendingProps:  // 已经是被更新的props，需要被运用到子组件或者dom 元素上
+    key: // 对应prop 上的key
+    stateNode:  // dom节点(HostComponent) / 类组件的实例 (ClassComponent) / fn() (FunctionComponent)
+    nextEffect:  // 指向下一个**effect list**中的节点 （effect list：一个workInProgress（finishedWork）的子树，是在render阶段 最终需要决定被执行更新 的产物，会在commit阶段被处理）
+    effectTag:  // 当前fiber需要执行的副作用类型
+    alternate:  // 用于构成**workInProgress**（从当前fiber树构建而来，反应了需要被更新渲染到用户屏幕的状态树）
+    return: // 指向父fiber节点
+    sibling: // 指向兄弟fiber节点
+    child： // 指向child fiber节点
+  }
+</code></pre>
+<p>同时这里还会注册事件。我们知道在 React 中，使用了事件代理自己实现了一套事件系统，在 React17 之前都是绑定到 document 上，而在 17 之后绑定到根元素节点即 div#root。因此我们在写代码时，虽然在 React 组件上绑定了像 onClick、onFocus 等事件，最终都是通过代理的方式触发的。</p>
+<p>我们在入口文件里会写上这么一句代码，其实执行的是内部的 render 方法：</p>
+<pre><code class="language-js">ReactDOM.render(&lt;App /&gt;, document.getElementById(&quot;root&quot;));
+
+// 在/packages/react-dom/src/client/index.js --&gt; /packages/react-dom/src/client/ReactDOM.js --&gt; src/react/packages/react-dom/src/client/ReactDOMLegacy.js
+export function render(
+  element: React$Element&lt;any&gt;,
+  container: Container,
+  callback: ?Function
+) {
+  // 判断容器是否合法，&lt;div id='root'&gt;&lt;/div&gt;,
+  invariant(
+    isValidContainer(container),
+    &quot;Target container is not a DOM element.&quot;
+  ); // 省略非重要代码...
+  return legacyRenderSubtreeIntoContainer(
+    null,
+    element,
+    container,
+    false,
+    callback
+  );
+}
+</code></pre>
+<p>React 采用了“双缓存”的思想，此时有两棵 Fiber 树，一个是 current，对应浏览器当前已经渲染的 dom 树，一个是 workInProgress，是在初始化时或者组件状态更新后由 reconciler 创建的一个工作副本。</p>
+<p>React 的渲染流程分为俩个阶段，一个是 render，一个是 commit</p>
+<h2>Render 阶段</h2>
+<p>render 阶段开始于 performSyncWorkOnRoot 或 performConcurrentWorkOnRoot 方法的调用，这两个方法的差异在于一个是同步，而另一个是异步(concurrent)的。</p>
+<p>这两个方法分别会调用下面两个方法—— workLoopSync 和 workLoopConcurrent：</p>
+<pre><code class="language-js">function workLoopSync() {
+  // Already timed out, so perform work without checking if we need to yield.
+  while (workInProgress !== null) {
+    performUnitOfWork(workInProgress);
+  }
+}
+
+function workLoopConcurrent() {
+  // Perform work until Scheduler asks us to yield
+  while (workInProgress !== null &amp;&amp; !shouldYield()) {
+    performUnitOfWork(workInProgress);
+  }
+}
+</code></pre>
+<p>在初始化的过程中，React 是采用同步的方式，不管是同步还是异步，他们都调用了 performUnitOfWork 方法：</p>
+<pre><code class="language-js">function performUnitOfWork(unitOfWork: Fiber): void {
+  const current = unitOfWork.alternate; // current树上对应的Fiber节点，有可能为null
+  // ...省略
+
+  let next; // 用来存放beginWork()返回的结果
+  if (enableProfilerTimer &amp;&amp; (unitOfWork.mode &amp; ProfileMode) !== NoMode) {
+    // ...省略
+    next = beginWork(current, unitOfWork, subtreeRenderLanes);
+    // ...省略
+  } else {
+    next = beginWork(current, unitOfWork, subtreeRenderLanes);
+  }
+
+  // ...省略
+  unitOfWork.memoizedProps = unitOfWork.pendingProps;
+  if (next === null) {
+    // beginWork返回null，表示无（或无需关注）当前节点的子Fiber节点
+    completeUnitOfWork(unitOfWork);
+  } else {
+    workInProgress = next; // 下次的workLoopSync/workLoopConcurrent的while循环的循环主体为子Fiber节点
+  }
+
+  // ...省略
+}
+</code></pre>
+<p>在没遍历执行 beginWork 之前，react 也不知道后续的组件结构会是啥样，所以在 beginWork 时每遇到一个组件时都要记录下来，同时要记录父组件和子组件、组件与组件间的关系，这样才能保证后续创建出来的 dom 树不会错乱掉。react 内部对于每个组件都会创建成 Fiber 对象，通过 Fiber 记录组件间的关系，最后构成一个 Fiber 链表结构。 父组件 parentFiber.child 指向第一个子组件对应的 fiber，子组件的 fiber.return 指向父组件，同时子组件的 fiber.sibling 指向其右边的相邻兄弟节点的 fiber, 构成一个 fiber 树。</p>
+<p><img src="../images/WX20230718-103657@2x.png" alt=""></p>
+<p>beginWork 的遍历并不是先查找完某一层所有的子元素再进行下一层的查找，而是只查父元素的第一个子元素，然后继续查找下一层的子元素，如果没有子元素才会查找兄弟元素，兄弟元素查找完再查找父元素的兄弟元素，类似于二叉树的前序遍历。所以对于上图的结构，遍历顺序如下:<br>
+App-&gt;Comp1-&gt;Comp3-&gt;div1-&gt;div2-&gt;div3-&gt;div4-&gt;Comp2-&gt;div5</p>
+<h3>beginWork 阶段</h3>
+<p>beginWork 主要的功能就是遍历查找子组件，建立关系树。</p>
+<ul>
+<li>
+<p>对于函数式组件，会执行组件对应的函数，注册 hooks，同时拿到函数 return 的结果，即为该组件的 child</p>
+</li>
+<li>
+<p>对于 class 组件，会先实例化 class，在这个阶段也会调用 class 的静态方法 getDerivedStateFromProps 以及实例的 componentWillMount 方法最后执行 render 方法拿到对应的 child</p>
+</li>
+</ul>
+<p>在 mount 阶段和 update 阶段， beginWork 的执行逻辑也有区别的。 我们都知道为了减少重排和重绘，react 帮助我们找出那些有变化的节点，只做这些节点的更新。</p>
+<ul>
+<li>
+<p>在 mount 阶段，因为在这之前没有创建节点，所以每个节点的 fiber 都是新建的</p>
+</li>
+<li>
+<p>在 update 阶段，会通过 diff 算法判断当前节点是否需要变更，如果需要变更会重新创建新的 fiber 对象并复用部分老的 fiber 对象属性，如果不需要变更则直接 clone 老的 fiber 对象；如果 diff 对比后老的 fiber 存在，新的 fiber 不存在，则会给 fiber 打上 Deletion 标签标示该元素需要删除； 如果老的 fiber 不存在，新的 fiber 存在说明是新创建的元素，则给 fiber 打上 Placement 标签</p>
+</li>
+</ul>
+<h3>completeWork 阶段</h3>
+<p>completeWork 阶段主要执行 dom 节点的创建或者标记变更。</p>
+<ul>
+<li>
+<p>在 mount 阶段时，对于自定义组件比如 class 组件、函数式组件，其实不做什么特殊处理; 对于 div、p、span(这种组件在 react 内部定义为 HostComponent)，就会调用 document.createElement 方法创建 dom 元素存放到该节点 fiber 对象的 stateNode 字段上；对于父元素是 HostComponent 的情况，先创建父元素的 dom 节点 parentInstance， 然后调用 parentInstance.appendChild(child)方法将子元素挂在该节点上。</p>
+</li>
+<li>
+<p>在 update 阶段，如果老的 fiber 存在则不会重新创建 dom 元素，而是给该元素打上 Update 标签；如果是新的元素和 mount 阶段一样创建新的 dom 元素</p>
+</li>
+</ul>
+<p><strong>此时，beginWork 和 completeWork 是交替执行。</strong></p>
+<p><img src="../images/WX20230718-103738@2x.png" alt=""></p>
+<p>经过 beginWork、completeWork， 每个组件节点的 dom 元素都创建完成或是被打上了对应的标签。在 mount 阶段，根组件下已经挂载了所有子元素节点的 dom， 那么只需要将根组件 dom 节点插入到 div#app 下即可；update 阶段组件 fiber 都被打上了标记，哪个元素需要删除，哪个需要更新都在下个阶段这些；这些操作在 commit 流程中进行。</p>
+<p>至此 fiber 结构应该长这样:</p>
+<p><img src="../images/WX20230731-233232%402x.png" alt=""></p>
+<h2>Commit 阶段</h2>
+<p>上面说了对于 dom 元素挂在到根标签 div#root 上以及一些元素的删除、更新等都是在 commit 阶段进行。 此外我们声明的一些 useLayoutEffect、useEffect 等 hooks，以及组件的生命周期也会在该阶段运行。 commit 又分为 3 个阶段分别为 commitBeforeMutationEffects、commitMutationEffects、commitLayoutEffects</p>
+<h3>commitBeforeMutationEffects</h3>
+<p>对于 HostRoot 根组件，在 mount 时会清除根节点 div#root 已有的子元素，为了插入 App 的 dom 做准备。</p>
+<ul>
+<li>
+<p>对于函数式组件，在这个阶段会通过 react-scheduler 以普通优先级调用 useEffect 但是不会立刻执行，可简单认为在这里加了一个延时器执行 useEffect;</p>
+</li>
+<li>
+<p>对于 class 组件会调用静态方法 getSnapshotBeforeUpdate, 即组件被提交到 dom 之前的方法</p>
+</li>
+</ul>
+<h3>commitMutationEffects</h3>
+<p>在这个阶段，主要是根据组件上打的对应标签，执行不同的逻辑</p>
+<ul>
+<li>
+<p>在 mount 阶段，App 组件对应的 dom 节点就会挂在到 div#root 上了，此时页面就可以看到对应的元素了；</p>
+</li>
+<li>
+<p>在 update 时，会根据被打的标签执行对应的 Update、Deletion、Placement 等；</p>
+</li>
+</ul>
+<p>同时在该阶段，如果存在 useLayoutEffect 的回调即组件被销毁的函数也会在该阶段执行</p>
+<h3>commitLayoutEffects</h3>
+<p>因为上个阶段已经把组件的 dom 元素挂在到页面中去了，这个阶段主要是执行组件的 mount 生命周期函数，比如函数组件的 useLayoutEffect、componentDidMount；以上三个阶段执行完，如果没有更高优先级的任务(比如在 didMount 生命周期里有调用 setState)，则第一阶段延迟执行的函数会调用 useEffect； 如果有则会进入 update 阶段，重新执行 beginWork、completeWork、commit。</p>
+<p>其实可以发现 useEffect 和 componentDidMount 的执行时机还是有区别的。</p>
+]]></content:encoded>
+            <author>cwzp990@gmail.com (Juzi)</author>
+        </item>
+        <item>
+            <title><![CDATA[reduce妙用]]></title>
+            <link>https://www.cwzp990.top/posts/reduce.html</link>
+            <guid>https://www.cwzp990.top/posts/reduce.html</guid>
+            <pubDate>Mon, 06 Mar 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[reduce]]></description>
+            <content:encoded><![CDATA[<h2>前言</h2>
+<p>reduce 是 JavaScript 数组对象上的一个高阶函数，它可以用来迭代数组中的所有元素，并返回一个单一的值。其常用的语法为：</p>
+<pre><code class="language-js">array.reduce(callback[, initialValue])
+</code></pre>
+<p>其中，callback 是一个回调函数，它接受四个参数：累加器（初始值或上一次回调函数的返回值）、当前元素、当前索引、操作的数组本身。initialValue 是一个可选的初始值，如果提供了该值，则作为累加器的初始值，否则累加器的初始值为数组的第一个元素。<br>
+reduce 函数会从数组的第一个元素开始，依次对数组中的每个元素执行回调函数。回调函数的返回值将成为下一次回调函数的第一个参数（累加器）。最后，reduce 函数返回最终的累加结果。以下是一个简单的 reduce 示例，用于计算数组中所有元素的和：</p>
+<pre><code class="language-js">const arr = [1, 2, 3, 4, 5];
+const sum = arr.reduce(
+  (accumulator, currentValue) =&gt; accumulator + currentValue
+);
+console.log(sum); // 15
+</code></pre>
+<p>在上面的代码中，reduce 函数从数组的第一个元素开始，计算累加值，返回最终的累加结果 15。<br>
+除了数组的求和，reduce 函数还可以用于其他各种用途，如数组求平均数、最大值、最小值等。此外，reduce 函数还可以与 map、filter、forEach 等函数组合使用，实现更加复杂的数据操作。</p>
+<p>当然，以下是一些 reduce 的实际应用案例，帮助你更好地理解它的用法：</p>
+<h3>计算数组的平均数</h3>
+<pre><code class="language-js">const arr = [1, 2, 3, 4, 5];
+const average = arr.reduce((accumulator, currentValue, index, array) =&gt; {
+  accumulator += currentValue;
+  if (index === array.length - 1) {
+    return accumulator / array.length;
+  } else {
+    return accumulator;
+  }
+});
+console.log(average); // 3
+</code></pre>
+<h3>求数组的最大值</h3>
+<pre><code class="language-js">const arr = [1, 2, 3, 4, 5];
+const max = arr.reduce((accumulator, currentValue) =&gt;
+  Math.max(accumulator, currentValue)
+);
+console.log(max); // 5
+</code></pre>
+<h3>求数组的最小值</h3>
+<pre><code class="language-js">const arr = [1, 2, 3, 4, 5];
+const min = arr.reduce((accumulator, currentValue) =&gt;
+  Math.min(accumulator, currentValue)
+);
+console.log(min); // 1
+</code></pre>
+<h3>数组去重</h3>
+<pre><code class="language-js">const arr = [1, 2, 3, 3, 4, 4, 5];
+const uniqueArr = arr.reduce((accumulator, currentValue) =&gt; {
+  if (!accumulator.includes(currentValue)) {
+    accumulator.push(currentValue);
+  }
+  return accumulator;
+}, []);
+console.log(uniqueArr); // [1, 2, 3, 4, 5]
+</code></pre>
+<h3>计算数组中每个元素出现的次数</h3>
+<pre><code class="language-js">const arr = [1, 2, 3, 3, 4, 4, 5];
+const countMap = arr.reduce((accumulator, currentValue) =&gt; {
+  if (!accumulator[currentValue]) {
+    accumulator[currentValue] = 1;
+  } else {
+    accumulator[currentValue]++;
+  }
+  return accumulator;
+}, {});
+console.log(countMap); // {1: 1, 2: 1, 3: 2, 4: 2, 5: 1}
+</code></pre>
+<h3>实现数组分组</h3>
+<pre><code class="language-js">const arr = [1, 2, 3, 4, 5];
+const result = arr.reduce(
+  (accumulator, currentValue) =&gt; {
+    if (currentValue % 2 === 0) {
+      accumulator.even.push(currentValue);
+    } else {
+      accumulator.odd.push(currentValue);
+    }
+    return accumulator;
+  },
+  { even: [], odd: [] }
+);
+console.log(result); // {even: [2, 4], odd: [1, 3, 5]}
+</code></pre>
+<h3>计算数组中连续递增数字的长度</h3>
+<pre><code class="language-js">const arr = [1, 2, 3, 5, 6, 7, 8, 9];
+const result = arr.reduce((accumulator, currentValue, index, array) =&gt; {
+  if (index === 0 || currentValue !== array[index - 1] + 1) {
+    accumulator.push([currentValue]);
+  } else {
+    accumulator[accumulator.length - 1].push(currentValue);
+  }
+  return accumulator;
+}, []);
+const maxLength = result.reduce(
+  (accumulator, currentValue) =&gt; Math.max(accumulator, currentValue.length),
+  0
+);
+console.log(maxLength); // 5
+</code></pre>
+<h3>计算对象数组的属性总和</h3>
+<pre><code class="language-js">const arr = [
+  { name: &quot;Alice&quot;, age: 25 },
+  { name: &quot;Bob&quot;, age: 30 },
+  { name: &quot;Charlie&quot;, age: 35 },
+];
+const result = arr.reduce(
+  (accumulator, currentValue) =&gt; accumulator + currentValue.age,
+  0
+);
+console.log(result); // 90
+</code></pre>
+<h3>将对象数组转换为键值对对象</h3>
+<pre><code class="language-js">const arr = [
+  { name: &quot;Alice&quot;, age: 25 },
+  { name: &quot;Bob&quot;, age: 30 },
+  { name: &quot;Charlie&quot;, age: 35 },
+];
+const result = arr.reduce((accumulator, currentValue) =&gt; {
+  accumulator[currentValue.name] = currentValue.age;
+  return accumulator;
+}, {});
+console.log(result); // {Alice: 25, Bob: 30, Charlie: 35}
+</code></pre>
+<h3>计算数组中出现次数最多的元素</h3>
+<pre><code class="language-js">const arr = [1, 2, 3, 4, 4, 4, 5, 5, 6, 6, 6, 6];
+const result = arr.reduce((accumulator, currentValue) =&gt; {
+  accumulator[currentValue] = (accumulator[currentValue] || 0) + 1;
+  return accumulator;
+}, {});
+const maxCount = Math.max(...Object.values(result));
+const mostFrequent = Object.keys(result)
+  .filter((key) =&gt; result[key] === maxCount)
+  .map(Number);
+console.log(mostFrequent); // [6]
+</code></pre>
+<h3>实现 Promise 串行执行</h3>
+<pre><code class="language-js">javascript 复制代码 const promise1 = () =&gt; Promise.resolve('one');
+const promise2 = (input) =&gt; Promise.resolve(input + ' two');
+const promise3 = (input) =&gt; Promise.resolve(input + ' three');
+
+const promises = [promise1, promise2, promise3];
+const result = promises.reduce((accumulator, currentValue) =&gt; {
+return accumulator.then(currentValue);
+}, Promise.resolve('start'));
+result.then(console.log); // 'one two three'
+</code></pre>
+<h3>对象属性值求和</h3>
+<pre><code class="language-js">const obj = {
+  a: 1,
+  b: 2,
+  c: 3,
+};
+const result = Object.values(obj).reduce(
+  (accumulator, currentValue) =&gt; accumulator + currentValue
+);
+console.log(result); // 6
+</code></pre>
+<h3>按属性对数组分组</h3>
+<pre><code class="language-js">const arr = [
+{ id: 1, name: 'John' },
+{ id: 2, name: 'Mary' },
+{ id: 3, name: 'Bob' },
+{ id: 4, name: 'Mary' }
+];
+const result = arr.reduce((accumulator, currentValue) =&gt; {
+const key = currentValue.name;
+if (!accumulator[key]) {
+accumulator[key] = [];
+}
+accumulator[key].push(currentValue);
+return accumulator;
+}, {});
+console.log(result);
+
+{
+  John: [{ id: 1, name: 'John' }],
+  Mary: [
+    { id: 2, name: 'Mary' },
+    { id: 4, name: 'Mary' }
+  ],
+  Bob: [{ id: 3, name: 'Bob' }]
+}
+</code></pre>
+<h3>扁平化数组</h3>
+<pre><code class="language-js">// 如果你有一个嵌套的数组，可以使用 reduce 将其扁平化成一个一维数组。例如：
+const nestedArray = [
+  [1, 2],
+  [3, 4],
+  [5, 6],
+];
+const flattenedArray = nestedArray.reduce((acc, curr) =&gt; acc.concat(curr), []);
+console.log(flattenedArray); // [1, 2, 3, 4, 5, 6]
+</code></pre>
+<h3>合并对象</h3>
+<pre><code class="language-js">// 可以使用 reduce 将多个对象合并成一个对象。例如：
+const obj1 = { a: 1, b: 2 };
+const obj2 = { c: 3, d: 4 };
+const obj3 = { e: 5, f: 6 };
+const mergedObj = [obj1, obj2, obj3].reduce(
+  (acc, curr) =&gt; Object.assign(acc, curr),
+  {}
+);
+console.log(mergedObj); // {a: 1, b: 2, c: 3, d: 4, e: 5, f: 6}
+</code></pre>
+]]></content:encoded>
+            <author>cwzp990@gmail.com (Juzi)</author>
+        </item>
+        <item>
+            <title><![CDATA[npm 相关回顾总结]]></title>
+            <link>https://www.cwzp990.top/posts/cli.html</link>
+            <guid>https://www.cwzp990.top/posts/cli.html</guid>
+            <pubDate>Fri, 24 Feb 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[npm node]]></description>
+            <content:encoded><![CDATA[<h2>前言</h2>
+<p>上家公司因为接触过脚手架项目，这里总结回顾一下项目中出现的问题。</p>
+<h2>npm run xxx</h2>
+<p>我们知道，我们在 package.json 中是可以写一些脚本命令的，那其中具体发生了什么呢？</p>
+<pre><code class="language-json">{
+  &quot;name&quot;: &quot;xxx&quot;,
+  &quot;private&quot;: true,
+  &quot;version&quot;: &quot;0.0.0&quot;,
+  &quot;scripts&quot;: {
+    &quot;start&quot;: &quot;vite&quot;,
+    &quot;build&quot;: &quot;vue-tsc &amp;&amp; vite build&quot;,
+    &quot;preview&quot;: &quot;vite preview&quot;,
+    &quot;lint&quot;: &quot;eslint . --ext .vue,.js,.ts,.jsx,.tsx --fix&quot;,
+    &quot;format&quot;: &quot;prettier --write \&quot;./**/*.{html,vue,ts,js,json,md}\&quot;&quot;,
+    &quot;lint:style&quot;: &quot;stylelint \&quot;./**/*.{css,less,vue,html}\&quot; --fix&quot;,
+    &quot;prepare&quot;: &quot;husky install&quot;
+  },
+  &quot;dependencies&quot;: {},
+  &quot;devDependencies&quot;: {}
+}
+</code></pre>
+<ul>
+<li>在我们执行 npm run start 的时候，实际上是在执行我们在 script 里面定义的命令，即 vite。那有人会问了，我的电脑上也没安装 vite，它是怎么调用的呢？</li>
+</ul>
+<p>其实，我们在进入项目之后安装依赖的时候，npm 就会在 node_modules/.bin/ 目录中创建好 vite 为名的几个可执行文件了。如下图：</p>
+<p><img src="../images/WX20230718-110346%402x.png" alt=""></p>
+<p>.bin 目录，这个目录不是任何一个 npm 包。目录下的文件，表示这是一个软链接，打开文件可以看到文件顶部写着 #!/bin/sh ，表示这是一个脚本：</p>
+<p><img src="../images/WX20230718-110659%402x.png" alt=""></p>
+<p>现在我们知道，当使用 npm run start 执行 vite 时，虽然没有安装 vite 的全局命令，但是 npm 会到 ./node_modules/.bin 中找到 vite 文件作为脚本来执行。</p>
+<ul>
+<li>那这个 bin 目录下的那些软连接文件是哪里来的呢？它又是怎么知道这条软连接是执行哪里的呢？</li>
+</ul>
+<p>在我们安装 node_modules 时，遇到了 vite 这个第三方包，在它的 package.json 里有一个 bin 字段:</p>
+<pre><code class="language-json">{
+  &quot;name&quot;: &quot;vite&quot;,
+  &quot;version&quot;: &quot;4.0.2&quot;,
+  &quot;type&quot;: &quot;module&quot;,
+  &quot;license&quot;: &quot;MIT&quot;,
+  &quot;author&quot;: &quot;Evan You&quot;,
+  &quot;description&quot;: &quot;Native-ESM powered web dev build tool&quot;,
+  &quot;bin&quot;: {
+    &quot;vite&quot;: &quot;bin/vite.js&quot;
+  },
+  &quot;main&quot;: &quot;./dist/node/index.js&quot;,
+  &quot;module&quot;: &quot;./dist/node/index.js&quot;,
+  &quot;types&quot;: &quot;./dist/node/index.d.ts&quot;,
+  ...
+}
+</code></pre>
+<p>当我们 npm i 整个新建项目的时候，npm 将 bin/vite.js 作为 bin 声明了。</p>
+<p>所以在 npm install 时，npm 读到该配置后，就将该文件软链接到 ./node_modules/.bin 目录下，而 npm 还会自动把 node_modules/.bin 加入$PATH，这样就可以直接作为命令运行依赖程序和开发依赖程序，不用全局安装了。</p>
+<p>也就是说，npm i 的时候，npm 就帮我们把这种软连接配置好了，其实这种软连接相当于一种映射，执行 npm run xxx 的时候，就会到 node_modules/bin 中找对应的映射文件，然后再找到相应的 js 文件来执行.</p>
+<h2>生命周期钩子</h2>
+<p>这里借用很多框架的生命周期钩子的概念，其实 npm 也在不同的生命周期 提供了一些钩子，可以方便你在项目运行的不同时间点进行一些脚本的编写。</p>
+<p>它的钩子分为两类：preXXX 和 postXXX ，前者是在脚本运行前，后者是在脚本运行后执行。所有的命令脚本都可以使用钩子（包括自定义的脚本）。例如：运行 npm run build，会按以下顺序执行：npm run prebuild --&gt; npm run build --&gt; npm run postbuild</p>
+<p>pre 脚本和 post 脚本也是出口代码敏感(exit-code-sensitive) 的，这意味着如果您的 pre 脚本以非零出口代码退出，那么 NPM 将立即停止，并且不运行后续脚本。通常你可以在 pre 脚本上执行一些准备工作，在 post 脚本上执行一些后续操作。</p>
+<p>所以我们可以在发布上线的时候，可以在 npm run postbuild 里写上上传服务器命令：</p>
+<pre><code class="language-json">{
+  &quot;script&quot;: {
+    &quot;postbuild&quot;: &quot;rsync --delete -av ./dist/ web98:/home/wslgrp/clinic_prod/webapps/ROOT&quot;
+  }
+}
+</code></pre>
+<p>这样在你打包之后就会自动上传前端文件到服务器，非常方便</p>
+<h2>dependencies &amp; devDependencies &amp; peerDependencies</h2>
+<p>三者的区别：</p>
+<ul>
+<li>
+<p>dependencies：src 源码中会使用到的</p>
+</li>
+<li>
+<p>devDependencies：仅开发时用的包，src 不会引入到的，当你的包被别人使用时，这里的依赖包是不会下载的</p>
+</li>
+<li>
+<p>peerDependencies：主要是用来做版本检查的，各个包管理工具处理情况不一致</p>
+</li>
+</ul>
+<p>注意对于我们的业务项目而言，是不需要区分 dependencies、devDependencies，实际情况是安装到哪里都可以的，也不需要设置 peerDependencies，三者只针对于 npm 包的开发者 而言才需要明白</p>
+]]></content:encoded>
+            <author>cwzp990@gmail.com (Juzi)</author>
+        </item>
+        <item>
+            <title><![CDATA[Vite HMR原理]]></title>
+            <link>https://www.cwzp990.top/posts/vite.hmr.html</link>
+            <guid>https://www.cwzp990.top/posts/vite.hmr.html</guid>
+            <pubDate>Tue, 17 Jan 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Vite HMR]]></description>
+            <content:encoded><![CDATA[<p>Vite 是最近比较流行的前端构建工具，相比于 webpack，它有很多的优点。这里想介绍一下两者相关 HMR 的区别。</p>
+<h2>webpack 的 HMR 过程</h2>
+<p>webpack 的 HMR 是由 webpack-dev-server 实现的。</p>
+<p>首先，我们先对 HMR 建立一个基础的认知。HMR 全称叫 Hot Module Replacement。相比较 live load，它具有以下优点：</p>
+<ul>
+<li>可以实现局部更新，避免多余的资源请求，提高开发效率</li>
+<li>在更新的时候可以保存应用原有状态</li>
+<li>在代码修改和页面更新方面，实现所见即所得</li>
+</ul>
+<p>而在 webpack 中实现 HMR 的核心就是 HotModuleReplacementPlugin，它是 webpack 内置的 plugin。在我们平常开发中，之所以改一个文件，例如 .vue 文件，会触发 HMR，是因为在 vue-loader 中已经内置了使用 HotModuleReplacementPlugin 的逻辑。</p>
+<h3>举例</h3>
+<ul>
+<li>.vue</li>
+</ul>
+<pre><code class="language-html">&lt;template&gt;
+  &lt;div&gt;hello world&lt;/div&gt;
+&lt;/template&gt;
+&lt;script lang=&quot;ts&quot;&gt;
+  import { Vue, Component } from &quot;vue-property-decorator&quot;;
+  @Component
+  export default class Helloworld extends Vue() {}
+&lt;/script&gt;
+</code></pre>
+<ul>
+<li>手动实现 HMR 的效果</li>
+</ul>
+<pre><code class="language-js">import Vue from 'vue'
+import HelloWorld from '_c/HelloWorld'
+
+if (module.hot) {
+  module.hot.accept('_c/HelloWorld', ()=&gt;{
+    // 拉取更新过的 HelloWorld.vue 文件
+  })
+}
+
+new Vue({
+  el: '#app',
+  template: '&lt;HelloWorld/&gt;'
+  component: { HelloWorld }
+})
+</code></pre>
+<p>上面是手动实现 HMR 的效果，底层原理有俩个关键的点：</p>
+<ul>
+<li>
+<p>与本地服务器建立「socket」连接，注册 hash 和 ok 两个事件，发生文件修改时，给客户端推送 hash 事件。客户端根据 hash 事件中返回的参数来拉取更新后的文件。</p>
+</li>
+<li>
+<p>HotModuleReplacementPlugin 会在文件修改后，生成两个文件，用于被客户端拉取使用。</p>
+</li>
+</ul>
+<pre><code class="language-js">// hash.hot-update.json
+{
+	&quot;c&quot;: {
+		&quot;chunkname&quot;: true
+	},
+	&quot;h&quot;: &quot;d69324ef62c3872485a2&quot;
+}
+
+// chunkname.d69324ef62c3872485a2.hot-update.js
+
+webpackHotUpdate(&quot;main&quot;,{
+   &quot;./src/test.js&quot;:
+  (function(module, __webpack_exports__, __webpack_require__) {
+    &quot;use strict&quot;;
+    eval(....)
+  })
+})
+</code></pre>
+<p>在这之前还会涉及到对原模块代码的注入，让它具备拉取文件的能力，这里我们先忽略。</p>
+<h2>Vite 基于 ES Module 的 devServer</h2>
+<p>基于 ES Module 的 devServer 是 Vite 实现 HMR 的关键，它会做下面两件事。</p>
+<ul>
+<li>
+<p>初始化本地服务器</p>
+</li>
+<li>
+<p>加载并执行对应的 Plugin，例如 sourceMapPlugin、moduleRewritePlugin、htmlRewritePlugin 等等。</p>
+</li>
+</ul>
+<p>本质上，devServer 做的最重要的一件事就是加载执行 Plugin。</p>
+<ul>
+<li>
+<p>拦截请求，处理 ES Module 语法相关的代码，转化为浏览器可识别的 ES Module 语法，例如第三方模块的 import 转化为 /@module/vue.js</p>
+</li>
+<li>
+<p>对 .ts、.vue 进行即时的编译以及 sass 或 less 的预编译</p>
+</li>
+<li>
+<p>建立模块间的导入导出关系，即 importeeMap 和客户端建立 socket 连接，用于实现 HMR</p>
+</li>
+</ul>
+<h3>准备过程</h3>
+<ul>
+<li>首先，我们执行 vite 命令，实际上是在运行 cli.js 这个入口文件</li>
+</ul>
+<pre><code class="language-js">(async () =&gt; {
+  const { help, h, mode, m, version, v } = argv
+  ...
+  const envMode = mode || m || defaultMode
+  const options = await resolveOptions(envMode)
+  // 开发环境下，我们会命中 runServer
+  if (!options.command || options.command === 'serve') {
+    runServe(options)
+  } else if (options.command === 'build') {
+    runBuild(options)
+  } else if (options.command === 'optimize') {
+    runOptimize(options)
+  } else {
+    console.error(chalk.red(`unknown command: ${options.command}`))
+    process.exit(1)
+  }
+})()
+async function runServe(options: UserConfig) {
+  // 在 createServer() 的时候会对 HRM、serverConfig 之类的进行初始化
+  const server = require('./server').createServer(options)
+  ...
+}
+</code></pre>
+<p>在这里，我们会执行<code>runServe()</code>，它的核心是调用 server.js 文件中的<code>createServer()</code></p>
+<pre><code class="language-js">export function createServer(config: ServerConfig): Server {
+  const {
+    ...,
+    enableEsbuild = true
+  } = config
+
+  const app = new Koa&lt;State, Context&gt;()
+  const server = resolveServer(config, app.callback())
+  const watcher = chokidar.watch(root, {
+    ignored: [/\bnode_modules\b/, /\b\.git\b/]
+  }) as HMRWatcher
+  const resolver = createResolver(root, resolvers, alias)
+
+  const context: ServerPluginContext = {
+    ...
+    watcher
+    ...
+  }
+
+  app.use((ctx, next) =&gt; {
+    Object.assign(ctx, context)
+    ctx.read = cachedRead.bind(null, ctx)
+    return next()
+  })
+
+  const resolvedPlugins = [
+    ...,
+    moduleRewritePlugin,
+    hmrPlugin,
+    ...
+  ]
+  // 核心逻辑执行 hmrPlugin
+  resolvedPlugins.forEach((m) =&gt; m &amp;&amp; m(context))
+
+  const listen = server.listen.bind(server)
+  server.listen = (async (port: number, ...args: any[]) =&gt; {
+    ...
+    }) as any
+
+  return server
+}
+</code></pre>
+<p>createServer 方法做了以下几件事：</p>
+<ul>
+<li>
+<p>创建一个 koa 实例</p>
+</li>
+<li>
+<p>创建监听除了 node_modules 之外的文件的 watcher，并传入 context 中</p>
+</li>
+<li>
+<p>将 context 上下文传入并调用每一个 Plugin</p>
+</li>
+</ul>
+<p>接下来就到了 Vite 的 HMR 过程！</p>
+<h3>Vite 的 HMR 过程</h3>
+<p>在 vite 中 HMR 的实现是以 serverPluginHmr 这个 Plugin 为核心实现。这里我们以 .vue 文件的修改触发的 HMR 为例，这个过程会涉及三个 Plugin：serverPluginHtml、serverPluginHmr、serverPluginVue：</p>
+<p>![Alt]: <a href="https://www.freesion.com/images/787/efefd4a700045a43512d1f0e71a5a6b3.png">https://www.freesion.com/images/787/efefd4a700045a43512d1f0e71a5a6b3.png</a></p>
+<h4>serverPluginHtml</h4>
+<p>这个 Plugin 向 index.html 中注入了获取 hmr 模块的代码:</p>
+<pre><code class="language-js">export const htmlRewritePlugin: ServerPlugin = ({
+  root,
+  app,
+  watcher,
+  resolver,
+  config
+}) =&gt; {
+  const devInjectionCode =
+    `\n&lt;script type=&quot;module&quot;&gt;\n` +
+    `import &quot;${hmrClientPublicPath}&quot;\n` +
+    `window.process = { env: { NODE_ENV: ${JSON.stringify(
+      config.mode || 'development'
+    )} }}\n` +
+    `&lt;/script&gt;\n`
+
+  const scriptRE = /(&lt;script\b[^&gt;]*&gt;)([\s\S]*?)&lt;\/script&gt;/gm
+  const srcRE = /\bsrc=(?:&quot;([^&quot;]+)&quot;|'([^']+)'|([^'&quot;\s]+)\b)/
+
+  async function rewriteHtml(importer: string, html: string) {
+    ...
+    html = html!.replace(scriptRE, (matched, openTag, script) =&gt; {
+      ...
+      return injectScriptToHtml(html, devInjectionCode)
+  }
+
+  app.use(async (ctx, next) =&gt; {
+    await next()
+    ...
+
+    if (ctx.response.is('html') &amp;&amp; ctx.body) {
+      const importer = ctx.path
+      const html = await readBody(ctx.body)
+      if (rewriteHtmlPluginCache.has(html)) {
+        ...
+      } else {
+        if (!html) return
+        // 在这里给 index.html 文件注入代码块
+        ctx.body = await rewriteHtml(importer, html)
+        rewriteHtmlPluginCache.set(html, ctx.body)
+      }
+      return
+    }
+  })
+
+}
+</code></pre>
+<p>所以，当我们访问一个 vite 启动的项目的时候，我们会在 network 中看到服务器返回给我们的 index.html 中的代码会多了这么一段代码：</p>
+<pre><code class="language-html">&lt;script type=&quot;module&quot;&gt;
+  import &quot;/vite/hmr&quot;;
+  window.process = { env: { NODE_ENV: &quot;development&quot; } };
+&lt;/script&gt;
+</code></pre>
+<p>而这一段代码，也是确保我们后续正常触发 HMR 的关键点。因为，在这里浏览器会向服务器发送请求获取 vite/hmr 模块，然后，在 serverPluginHmr 中会拦截<code>ctx.path==='/vite/hmr'</code>的请求，建立 socket 连接。</p>
+<h3>serverPluginHmr</h3>
+<p>上面我们说了 serverPluginHmr 它会劫持导入 /vite/hmr 的请求，然后返回 client.js 文件。</p>
+<ol>
+<li>读取 cliten.js 文件，劫持导入 /vite/hmr 的请求</li>
+</ol>
+<pre><code class="language-js">export const hmrClientFilePath = path.resolve(
+   __dirname,
+   '../../client/client.js'
+ )
+ export const hmrClientPublicPath = `/vite/hmr`
+ const hmrClient = fs
+    .readFileSync(hmrClientFilePath, 'utf-8')
+    .replace(`__SW_ENABLED__`, String(!!config.serviceWorker))
+
+  app.use(async (ctx, next) =&gt; {
+    if (ctx.path === hmrClientPublicPath) {
+      ctx.type = 'js'
+      ctx.status = 200
+      ctx.body = hmrClient.replace(`__PORT__`, ctx.port.toString())
+    } else {
+      ...
+    }
+  })
+</code></pre>
+<p>这里通过 <code>readFileSync()</code> 读取 client.js 文件，然后分别替换读取到的文件内容（字符串），一个是用于判断是否支持 serviceWorker，另一个用于建立 socket 连接时的端口设置。</p>
+<ol start="2">
+<li>定义了 send 方法，并赋值给 watcher.send，用于其他 Plugin 在热更新时向浏览器推送更新信息：</li>
+</ol>
+<pre><code class="language-js">const send = (watcher.send = (payload: HMRPayload) =&gt; {
+  const stringified = JSON.stringify(payload, null, 2);
+  debugHmr(`update: ${stringified}`);
+
+  wss.clients.forEach((client) =&gt; {
+    // OPEN 表示已经建立连接
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(stringified);
+    }
+  });
+});
+</code></pre>
+<ol start="3">
+<li>client.js</li>
+</ol>
+<p>它做了两件事：</p>
+<ul>
+<li>建立和服务器的 socket 连接，监听 message 事件，拿到服务器推送的 data，例如我们只修改 .vue 文件:</li>
+</ul>
+<pre><code class="language-js">export interface UpdatePayload {
+  type: 'js-update' | 'vue-reload' | 'vue-rerender' | 'style-update'
+  path: string
+  changeSrcPath: string
+  timestamp: number
+}
+</code></pre>
+<ul>
+<li>对不同的 data.type 执行不同的逻辑</li>
+</ul>
+<pre><code class="language-js">onst socketProtocol = location.protocol === 'https:' ? 'wss' : 'ws'
+const socketUrl = `${socketProtocol}://${location.hostname}:${__PORT__}`
+const socket = new WebSocket(socketUrl, 'vite-hmr')
+// 监听 message 事件，拿到服务端推送的 data
+socket.addEventListener('message', async ({ data }) =&gt; {
+  const payload = JSON.parse(data) as HMRPayload | MultiUpdatePayload
+  if (payload.type === 'multi') {
+    payload.updates.forEach(handleMessage)
+  } else {
+    // 通常情况下会命中这个逻辑
+    handleMessage(payload)
+  }
+})
+async function handleMessage(payload: HMRPayload) {
+  const { path, changeSrcPath, timestamp } = payload as UpdatePayload
+  ...
+  switch (payload.type) {
+    ...
+    case 'vue-rerender':
+      const templatePath = `${path}?type=template`
+      ...
+      import(`${templatePath}&amp;t=${timestamp}`).then((m) =&gt; {
+        __VUE_HMR_RUNTIME__.rerender(path, m.render)
+        console.log(`[vite] ${path} template updated.`)
+      })
+      break
+    ...
+  }
+}
+</code></pre>
+<h3>serverPluginVue</h3>
+<p>前面，我们讲了 serverPluginHtml 和 serverPluginHmr 在 HMR 过程会做的一些前期准备。然后，我们这次分析的修改 .vue 文件触发的 HMR 逻辑。</p>
+<p>首先，它会解析 .vue 文件，做一些 compiler 处理，然后通过 watcher 监听 .vue 文件的修改:</p>
+<pre><code class="language-js">watcher.on(&quot;change&quot;, (file) =&gt; {
+  if (file.endsWith(&quot;.vue&quot;)) {
+    handleVueReload(file);
+  }
+});
+</code></pre>
+<p>可以看到在 change 事件的回调中调用了 handleVueReload()</p>
+<pre><code class="language-js">const handleVueReload = (watcher.handleVueReload = async (
+    filePath: string,
+    timestamp: number = Date.now(),
+    content?: string
+  ) =&gt; {
+    const publicPath = resolver.fileToRequest(filePath)
+    const cacheEntry = vueCache.get(filePath)
+    const { send } = watcher
+    ...
+    let needRerender = false
+    ...
+    if (!isEqualBlock(descriptor.template, prevDescriptor.template)) {
+      needRerender = true
+    }
+    ...
+    if (needRerender) {
+      send({
+        type: 'vue-rerender',
+        path: publicPath,
+        changeSrcPath: publicPath,
+        timestamp
+      })
+    }
+  })
+</code></pre>
+<p>handleVueReload() 它会针对 .vue 文件中，不同情况走不同的逻辑。这里，我们只是修改了 .vue 文件，给它加了一行代码，那么此时就会命中 isEqualBlock() 为 false 的逻辑，所以 needRerender 为 true，最终通过 send() 方法向浏览器推送 type 为 vue-rerender 以及携带修改的文件路径的信息。然后，我们前面 client.js 中监听 message 的地方就会拿到对应的 data，再通过 import 发起获取该模块的请求。</p>
+<h3>总结</h3>
+<p>本文只是针对.vue 文件的修改分析了整个 HMR 的过程，其实还有.js、.css 等文件修改触发 HMR 的逻辑，其实其他的都大同小异。</p>
+]]></content:encoded>
+            <author>cwzp990@gmail.com (Juzi)</author>
+        </item>
+        <item>
+            <title><![CDATA[Vite过程中CommonJs兼容问题]]></title>
+            <link>https://www.cwzp990.top/posts/vite.commonjs.html</link>
+            <guid>https://www.cwzp990.top/posts/vite.commonjs.html</guid>
+            <pubDate>Wed, 28 Dec 2022 00:00:00 GMT</pubDate>
+            <description><![CDATA[Vite 兼容性]]></description>
+            <content:encoded><![CDATA[<h2>创建 CommonJs 包</h2>
+<p>文件目录结构：</p>
+<pre><code class="language-bash">.
+├── libs
+│   ├── bar
+│   │   ├── bar.js
+│   │   ├── index.js
+│   │   └── package.json
+│   └── foo
+│       ├── index.js
+│       └── package.json
+├── node_modules
+├── index.html
+├── main.js
+├── style.css
+└── vite.config.js
+</code></pre>
+<p>通常，我们可以在 node_modules 下直接创建 foo 和 bar 包，为了方便维护，我们将自定义的 CommonJs 包放到 libs 目录，再进行 link。</p>
+<p>其中 foo 模块只定义了 index.js:</p>
+<pre><code class="language-js">// foo/index.js
+function foo(name) {
+  console.log(`Hi ${name}!`);
+}
+
+Object.defineProperty(exports, &quot;__esModule&quot;, { value: true });
+exports.foo = foo;
+exports.default = foo;
+</code></pre>
+<blockquote>
+<p>这里定义__esModule 为 true 是为了假装从 ES Module 转换生成的 CommonJs，同时定义了 exports.default，纯的 CommonJs 包使用 exports（或者 module.exports）而不是 exports.default 作为默认导出。</p>
+</blockquote>
+<p>bar 模块和 foo 模块几乎一致，但是多了一次额外的导入导出:</p>
+<pre><code class="language-js">// bar/bar.js
+function bar(name) {
+  console.log(`Hi ${name}!`);
+}
+
+Object.defineProperty(exports, &quot;__esModule&quot;, { value: true });
+exports.bar = bar;
+exports.default = bar;
+
+// bar/index.js
+module.exports = require(&quot;./bar&quot;);
+</code></pre>
+<p>package.json 使用相对路径来安装 libs 的两个包</p>
+<pre><code class="language-json">{
+  &quot;name&quot;: &quot;vite-demo&quot;,
+  &quot;version&quot;: &quot;0.0.0&quot;,
+  &quot;scripts&quot;: {
+    &quot;dev&quot;: &quot;vite&quot;,
+    &quot;build&quot;: &quot;vite build&quot;,
+    &quot;serve&quot;: &quot;vite preview&quot;
+  },
+  &quot;dependencies&quot;: {
+    &quot;bar&quot;: &quot;./libs/bar&quot;,
+    &quot;foo&quot;: &quot;./libs/foo&quot;
+  },
+  &quot;devDependencies&quot;: {
+    &quot;vite&quot;: &quot;^2.6.14&quot;
+  }
+}
+</code></pre>
+<p>main.js 定义为 ES Module,引用 foo 模块和 bar 模块:</p>
+<pre><code class="language-js">// main.js
+import fooDefault, { foo } from &quot;foo&quot;;
+import barDefault, { bar } from &quot;bar&quot;;
+
+foo(&quot;foo&quot;);
+fooDefault(&quot;fooDefault&quot;);
+
+bar(&quot;bar&quot;);
+barDefault(&quot;barDefault&quot;);
+</code></pre>
+<h2>安装构建</h2>
+<p>下面开始安装</p>
+<pre><code class="language-bash">pnpm install
+
+bar is linked to D:\vite-demo\node_modules from D:\vite-demo\libs\bar
+foo is linked to D:\vite-demo\node_modules from D:\vite-demo\libs\foo
+Already up-to-date
+Progress: resolved 22, reused 5, downloaded 0, added 0, done
+</code></pre>
+<p>pnpm 安装后会在 node_modules 目录创建链接。此时 vite dev 运行正常，vite build 报错。</p>
+<pre><code class="language-bash">pnpm build
+
+&gt; vite-demo@0.0.0 build D:\vite-demo
+&gt; vite build
+
+vite v2.6.14 building for production...
+✓ 5 modules transformed.
+'foo' is not exported by libs\foo\index.js, imported by main.js
+file: D:/vite-demo/main.js:1:20
+1: import fooDefault, {foo} from 'foo'
+                       ^
+2: import barDefault, {bar} from 'bar'
+error during build:
+Error: 'foo' is not exported by libs\foo\index.js, imported by main.js
+    at error (D:\vite-demo\node_modules\.pnpm\rollup@2.60.1\node_modules\rollup\dist\shared\rollup.js:158:30)
+    at Module.error (D:\vite-demo\node_modules\.pnpm\rollup@2.60.1\node_modules\rollup\dist\shared\rollup.js:12382:16)
+    at Module.traceVariable (D:\vite-demo\node_modules\.pnpm\rollup@2.60.1\node_modules\rollup\dist\shared\rollup.js:12767:29)
+    at ModuleScope.findVariable (D:\vite-demo\node_modules\.pnpm\rollup@2.60.1\node_modules\rollup\dist\shared\rollup.js:11559:39)
+    at Identifier.bind (D:\vite-demo\node_modules\.pnpm\rollup@2.60.1\node_modules\rollup\dist\shared\rollup.js:6419:40)
+    at CallExpression.bind (D:\vite-demo\node_modules\.pnpm\rollup@2.60.1\node_modules\rollup\dist\shared\rollup.js:5025:23)
+    at CallExpression.bind (D:\vite-demo\node_modules\.pnpm\rollup@2.60.1\node_modules\rollup\dist\shared\rollup.js:9396:15)
+    at ExpressionStatement.bind (D:\vite-demo\node_modules\.pnpm\rollup@2.60.1\node_modules\rollup\dist\shared\rollup.js:5025:23)
+    at Program.bind (D:\vite-demo\node_modules\.pnpm\rollup@2.60.1\node_modules\rollup\dist\shared\rollup.js:5021:31)
+    at Module.bindReferences (D:\vite-demo\node_modules\.pnpm\rollup@2.60.1\node_modules\rollup\dist\shared\rollup.js:12378:18)
+ ELIFECYCLE  Command failed with exit code 1.
+</code></pre>
+<p>其实上面的异常来源于 Rollup，因为 vite 是对 Rollup 做了封装。运行 vite build 时，把 CommonJs 转换成 ES Module 的工作是由插件@rollup/plugin-commonjs 实现的，vite 通过 build.commonjsOptions 配置项自定义参数。</p>
+<ul>
+<li></li>
+<li></li>
+</ul>
+<p>在 @rollup/plugin-commonjs 的文档中可以搜到 symlink 相关的使用注意项：</p>
+<blockquote>
+<p>Usage with symlinks<br>
+Symlinks are common in monorepos and are also created by the npm link command. Rollup with @rollup/plugin-node-resolve resolves modules to their real paths by default. So include and exclude paths should handle real paths rather than symlinked paths (e.g. ../common/node_modules/** instead of node_modules/**). You may also use a regular expression for include that works regardless of base path. Try this:</p>
+</blockquote>
+<pre><code class="language-js">commonjs({
+  include: /node_modules/,
+});
+</code></pre>
+<p>Whether symlinked module paths are realpathed or preserved depends on Rollup's preserveSymlinks setting, which is false by default, matching Node.js' default behavior. Setting preserveSymlinks to true in your Rollup config will cause import and export to match based on symlinked paths instead.</p>
+<p>这里的 include 应该就是我们需要的。见 <a href="https://github.com/vitejs/vite/blob/d2887729911d52e3117a7649e85460b346f04b54/packages/vite/src/node/build.ts#L264-L268%E3%80%82">https://github.com/vitejs/vite/blob/d2887729911d52e3117a7649e85460b346f04b54/packages/vite/src/node/build.ts#L264-L268。</a></p>
+<pre><code class="language-js">    commonjsOptions: {
+      include: [/node_modules/],
+      extensions: ['.js', '.cjs'],
+      ...raw?.commonjsOptions
+    }
+</code></pre>
+<p>vite 默认只对 node_modules 文件夹下的.js 和.cjs 做转换。如果我们把 libs 文件夹加进去，Rollup 就可以正确转换 foo 和 bar 模块了。</p>
+<pre><code class="language-js">// vite.config.js
+import { defineConfig } from &quot;vite&quot;;
+
+export default defineConfig({
+  build: {
+    commonjsOptions: {
+      include: /node_modules|libs/,
+    },
+  },
+});
+</code></pre>
+<h2>运行</h2>
+<p>构建完成后，运行 pnpm serve，打开浏览器看控制台输出。</p>
+<pre><code class="language-bash">Hi foo!
+Hi fooDefault!
+Hi bar!
+Uncaught TypeError: bar is not a function
+</code></pre>
+<p>对照 main.js 来看:</p>
+<pre><code class="language-js">// main.js
+import fooDefault, { foo } from &quot;foo&quot;;
+import barDefault, { bar } from &quot;bar&quot;;
+
+foo(&quot;foo&quot;);
+fooDefault(&quot;fooDefault&quot;);
+
+bar(&quot;bar&quot;);
+barDefault(&quot;barDefault&quot;);
+</code></pre>
+<p>只有通过默认导入的形式使用 bar 包会报错，如 import xxx from 'xxx'。</p>
+<p>在解决 Uncaught TypeError: bar is not a function 错误之前，我们再翻翻 @rollup/plugin-commonjs 的文档。其中有一个 defaultIsModuleExports 配置项，可以控制从 ES Module 中导入 CommonJS 模块时的默认导出对象。</p>
+<ul>
+<li>为 true 时，使用 module.exports 作为默认导出</li>
+</ul>
+<pre><code class="language-js">// mod.cjs
+exports.default = 3;
+
+import foo from &quot;./mod.cjs&quot;;
+console.log(foo); // { default: 3 }
+</code></pre>
+<ul>
+<li>为 false 时，使用 exports.default 作为默认导出</li>
+</ul>
+<pre><code class="language-js">// mod.cjs
+exports.default = 3;
+
+import foo from &quot;./mod.cjs&quot;;
+console.log(foo); // 3
+</code></pre>
+<ul>
+<li>为 &quot;auto&quot; 时，判断 CommonJS 模块是否有 exports.__esModule 属性且为 true，若满足，使用 exports.default 作为默认导出，否则使用 module.exports</li>
+</ul>
+<pre><code class="language-js">// mod.cjs
+exports.default = 3;
+
+// mod-compiled.cjs
+exports.__esModule = true;
+exports.default = 3;
+
+import foo from &quot;./mod.cjs&quot;;
+import bar from &quot;./mod-compiled.cjs&quot;;
+console.log(foo); // { default: 3 }
+console.log(bar); // 3
+</code></pre>
+<p>defaultIsModuleExports 的默认值为 &quot;auto&quot;，不得不说是最佳设置，原来 Rollup 是通过 exports.__esModule === true 来控制模块默认导出</p>
+<p>Rollup 相关代码如下：</p>
+<pre><code class="language-js">// https://github.com/rollup/plugins/blob/02fb349d315f0ffc55970fba5de20e23f8ead881/packages/commonjs/src/transform-commonjs.js#L152-L162
+if (defaultIsModuleExports === false) {
+  shouldWrap = true;
+} else if (defaultIsModuleExports === &quot;auto&quot;) {
+  if (node.right.type === &quot;ObjectExpression&quot;) {
+    if (hasDefineEsmProperty(node.right)) {
+      shouldWrap = true;
+    }
+  } else if (defaultIsModuleExports === false) {
+    shouldWrap = true;
+  }
+}
+
+// https://github.com/rollup/plugins/blob/02fb349d315f0ffc55970fba5de20e23f8ead881/packages/commonjs/src/transform-commonjs.js#L191-L200
+if (isDefineCompiledEsm(node)) {
+  if (programDepth === 3 &amp;&amp; parent.type === &quot;ExpressionStatement&quot;) {
+    // skip special handling for [module.]exports until we know we render this
+    skippedNodes.add(node.arguments[0]);
+    topLevelDefineCompiledEsmExpressions.push(node);
+  } else {
+    shouldWrap = true;
+  }
+  return;
+}
+
+// https://github.com/rollup/plugins/blob/02fb349d315f0ffc55970fba5de20e23f8ead881/packages/commonjs/src/ast-utils.js#L111-L123
+export function hasDefineEsmProperty(node) {
+  return node.properties.some((property) =&gt; {
+    if (
+      property.type === &quot;Property&quot; &amp;&amp;
+      property.key.type === &quot;Identifier&quot; &amp;&amp;
+      property.key.name === &quot;__esModule&quot; &amp;&amp;
+      isTruthy(property.value)
+    ) {
+      return true;
+    }
+    return false;
+  });
+}
+
+// https://github.com/rollup/plugins/blob/02fb349d315f0ffc55970fba5de20e23f8ead881/packages/commonjs/src/ast-utils.js#L61-L70
+export const KEY_COMPILED_ESM = &quot;__esModule&quot;;
+
+export function isDefineCompiledEsm(node) {
+  const definedProperty =
+    getDefinePropertyCallName(node, &quot;exports&quot;) ||
+    getDefinePropertyCallName(node, &quot;module.exports&quot;);
+  if (definedProperty &amp;&amp; definedProperty.key === KEY_COMPILED_ESM) {
+    return isTruthy(definedProperty.value);
+  }
+  return false;
+}
+</code></pre>
+<p>demo 报错的罪魁祸首是 bar 比 foo 多出来的那段代码：</p>
+<pre><code class="language-js">module.exports = require(&quot;./bar&quot;);
+</code></pre>
+<p>和 ES Module 不同的是，前者可以通过静态分析出依赖关系和导出对象，而 CommonJS 要等到运行时才能确定。这就导致<code>module.exports = require('./bar')</code>在语法层面缺少 __esModule: true 属性，Rollup 只分析 AST 的话无法直接检测到。</p>
+<p>我们单独做一个测试，用 node 验证一下：</p>
+<pre><code class="language-js">// test.js
+const bar = require(&quot;bar&quot;);
+
+console.log(Object.keys(bar)); // [ 'bar', 'default' ]
+console.log(bar.__esModule); // true
+</code></pre>
+<p>此时，bar 模块的 __esModule 属性为 true。</p>
+<p>而如果将 defaultIsModuleExports 从 &quot;auto&quot; 改成 false</p>
+<pre><code class="language-js">// vite.config.js
+import { defineConfig } from &quot;vite&quot;;
+
+export default defineConfig({
+  build: {
+    minify: false,
+    commonjsOptions: {
+      include: /node_modules|libs/,
+      defaultIsModuleExports: false,
+    },
+  },
+});
+</code></pre>
+<p>vite build 可以正常运行:</p>
+<pre><code class="language-bash">Hi foo!
+Hi fooDefault!
+Hi bar!
+Hi barDefault!
+</code></pre>
+<p>不过这样设置并不好，因为正常的 CommonJs 包并不会导出 exports.default 这么一个为了兼容 ES Module 而存在的属性。</p>
+<p>作为第三方库的开发者，不应同时使用<code>__esModule: true</code> 和额外的 <code>module.exports = require('./index')</code> 这样的入口文件。</p>
+<p>以 react 为例：</p>
+<ul>
+<li><a href="https://unpkg.com/browse/react@17.0.2/cjs/react.development.js">https://unpkg.com/browse/react@17.0.2/cjs/react.development.js</a></li>
+</ul>
+<p>react 目前是一个纯正的 CommonJs 包，一般我们这样使用：</p>
+<pre><code class="language-js">import * as React from &quot;react&quot;;
+import { Suspense } from &quot;react&quot;;
+</code></pre>
+<blockquote>
+<p>至于平时的<code>import React from 'react'</code>写法是 webpack、tsc 等工具做了特殊处理，统一包装成 { default: ... } 形式，补上了 default 字段，而且 React 的 API 都挂在 React 对象上，其本身不作为函数被调用。</p>
+</blockquote>
+<p>react-activation 既有 <code>__esModule: true</code> 和 exports.default（因为它的源码使用了 ESM，打包时使用 Rollup 做了转换），同时也仿照 react 定义了一个 index.js：</p>
+<pre><code class="language-js">//  https://github.com/CJY0208/react-activation/blob/bd010077fdf1c20cbf45fea24fc0d25c048919b2/index.js
+if (process.env.NODE_ENV === &quot;production&quot;) {
+  module.exports = require(&quot;./lib/index.min.js&quot;);
+} else {
+  module.exports = require(&quot;./lib/index.js&quot;);
+}
+
+import KeepAlive from &quot;react-activation&quot;;
+
+&lt;KeepAlive&gt;&lt;/KeepAlive&gt;;
+</code></pre>
+<p>所以产生了报错。</p>
+<h2>结论</h2>
+<p>所以使用 Vite 过程中遇到 CommonJS 兼容问题怎么解决呢？我们可以给 <code>react-activation</code> 这样的库提 Issue 或 PR，避免既导出为 CommonJS，又让调用方通过默认导入的形式使用，问题的锅不在 Vite。</p>
+<p>与开发模式不同，Vite 生产构建时，CommonJS 模块的转换由 Rollup 接手处理，@rollup/plugin-commonjs 转换时依赖 exports.<strong>esModule。开发模式不报错，是因为存在冗余的运行时判断，凡是默认导入的 CommonJS 包都会加上三目运算符检查</strong>esModule 属性。</p>
+<pre><code class="language-js">import __vite__cjsImport3_reactActivation from &quot;/node_modules/.vite/react-activation.js?v=5ba8f290&quot;;
+const KeepAlive = __vite__cjsImport3_reactActivation.__esModule
+  ? __vite__cjsImport3_reactActivation.default
+  : __vite__cjsImport3_reactActivation;
+</code></pre>
+<blockquote>
+<p>相关 Vite 代码</p>
+</blockquote>
+<pre><code class="language-js">// https://github.com/vitejs/vite/blob/d2887729911d52e3117a7649e85460b346f04b54/packages/vite/src/node/plugins/importAnalysis.ts#L685-L688
+
+} else if (importedName === 'default') {
+ lines.push(
+   `const ${localName} = ${cjsModuleName}.__esModule ? ${cjsModuleName}.default : ${cjsModuleName}`
+ )
+} else {
+ lines.push(`const ${localName} = ${cjsModuleName}[&quot;${importedName}&quot;]`)
+}
+</code></pre>
+]]></content:encoded>
+            <author>cwzp990@gmail.com (Juzi)</author>
+        </item>
+        <item>
+            <title><![CDATA[构建工具迁移出现的问题]]></title>
+            <link>https://www.cwzp990.top/posts/vite.build.html</link>
+            <guid>https://www.cwzp990.top/posts/vite.build.html</guid>
+            <pubDate>Tue, 20 Dec 2022 00:00:00 GMT</pubDate>
+            <description><![CDATA[Vite 打包构建]]></description>
+            <content:encoded><![CDATA[<h2>问题</h2>
+<p>最近，在将项目的构建工具从 webpack 迁移到了 Vite，开发和构建过程非常迅速，但部署时发现其静态文件在浏览器上报错了：</p>
+<blockquote>
+<p>Element type is invalid: expected a string (for built-in components) or a class/function (for composite components) but got: object.</p>
+</blockquote>
+<p>但是之前用 webpack 打包是没有问题的，唯独 Vite 产生了报错。排查之后发现是项目中使用了第三方包<code>react-activation</code>引起的。</p>
+<pre><code class="language-jsx">import React, { useState } from &quot;react&quot;;
+import ReactDOM from &quot;react-dom&quot;;
+import KeepAlive, { AliveScope } from &quot;react-activation&quot;;
+
+function Counter() {
+  const [count, setCount] = useState(0);
+
+  return (
+    &lt;div&gt;
+      count: {count}
+      &lt;button onClick={() =&gt; setCount((count) =&gt; count + 1)}&gt;add&lt;/button&gt;
+    &lt;/div&gt;
+  );
+}
+
+function App() {
+  const [show, setShow] = useState(true);
+
+  return (
+    &lt;AliveScope&gt;
+      &lt;button onClick={() =&gt; setShow((show) =&gt; !show)}&gt;Toggle&lt;/button&gt;
+      &lt;div&gt;without {`&lt;KeepAlive&gt;`}&lt;/div&gt;
+      {show &amp;&amp; &lt;Counter /&gt;}
+      &lt;div&gt;with {`&lt;KeepAlive&gt;`}&lt;/div&gt;
+      {show &amp;&amp; (
+        &lt;KeepAlive&gt;
+          &lt;Counter /&gt;
+        &lt;/KeepAlive&gt;
+      )}
+    &lt;/AliveScope&gt;
+  );
+}
+
+ReactDOM.render(&lt;App /&gt;, document.getElementById(&quot;root&quot;));
+</code></pre>
+<p>报错的是 <code>&lt;KeepAlive&gt;&lt;/KeepAlive&gt;</code> 代码，但 KeepAlive 组件本身没有问题。</p>
+<h2>原因</h2>
+<p>要确定错误的原因很简单，从 React 报错的 Stack Trace 中点进去，设置断点，便可以发现：</p>
+<p><img src="https://keqingrong.cn/assets/621caedd8290f95335363b70a131a2fb/react-activation-default-exports.png" alt="Alt"></p>
+<p>报错显示，这里的 KeepAlive 是个对象，而不是 React 期望的函数或者类。</p>
+<p>修改模块的引入方式，问题解决：</p>
+<pre><code class="language-js">import KeepAlive from &quot;react-activation&quot;;
+// 改为
+import { KeepAlive } from &quot;react-activation&quot;;
+</code></pre>
+<h2>反思</h2>
+<p>问题虽然解决了，但可以想想其中的缘由。</p>
+<h3>react-activation 是如何导出模块的</h3>
+<p>首先，我们去看看 react-activation 的导出：</p>
+<pre><code class="language-js">// https://github.com/CJY0208/react-activation/blob/bd010077fdf1c20cbf45fea24fc0d25c048919b2/src/index.js#L12-L25
+
+// src/index.js
+export default KeepAlive;
+export {
+  KeepAlive,
+  AliveScope,
+  withActivation,
+  fixContext,
+  autoFixContext,
+  useActivate,
+  useUnactivate,
+  createContext,
+  withAliveScope,
+  useAliveController,
+  NodeKey,
+};
+</code></pre>
+<p>导出了所有对外 Api，同时将 KeepAlive 作为默认导出，构建后变成：</p>
+<pre><code class="language-js">// https://unpkg.com/browse/react-activation@0.9.5/lib/index.js
+
+// lib/index.js
+Object.defineProperty(exports, &quot;__esModule&quot;, { value: true });
+
+exports.AliveScope = AliveScope;
+exports.KeepAlive = KeepAlive$1;
+exports.NodeKey = NodeKey;
+exports.autoFixContext = autoFixContext;
+exports.createContext = createContext;
+exports.default = KeepAlive$1;
+exports.fixContext = fixContext;
+exports.useActivate = useActivate;
+exports.useAliveController = useAliveController;
+exports.useUnactivate = useUnactivate;
+exports.withActivation = withActivation;
+exports.withAliveScope = withAliveScope;
+</code></pre>
+<p>再看看它的入口文件：</p>
+<pre><code class="language-js">// https://github.com/CJY0208/react-activation/blob/bd010077fdf1c20cbf45fea24fc0d25c048919b2/index.js#L3-L7
+
+// index.js
+if (process.env.NODE_ENV === &quot;production&quot;) {
+  module.exports = require(&quot;./lib/index.min.js&quot;);
+} else {
+  module.exports = require(&quot;./lib/index.js&quot;);
+}
+</code></pre>
+<p>可以发现，它是采用的 CommonJs 模块导出方式。</p>
+<h3>Vite 的构建过程</h3>
+<p>对于下面的代码：</p>
+<pre><code class="language-js">import KeepAlive from &quot;react-activation&quot;;
+</code></pre>
+<p>在开发模式下，Vite 将会处理成：</p>
+<pre><code class="language-js">import __vite__cjsImport3_reactActivation from &quot;/node_modules/.vite/react-activation.js?v=5ba8f290&quot;;
+const KeepAlive = __vite__cjsImport3_reactActivation.__esModule
+  ? __vite__cjsImport3_reactActivation.default
+  : __vite__cjsImport3_reactActivation;
+</code></pre>
+<p>这里的 KeepAlive 始终是函数。</p>
+<p>但是在生产模式下，Vite 是这样构建的：</p>
+<pre><code class="language-js">import {
+  j as jsxRuntime,
+  r as react,
+  K as KeepAlive,
+  R as ReactDOM,
+  a as reactActivation,
+} from &quot;./vendor.8e846e2e.js&quot;;
+// ...
+const jsx = jsxRuntime.exports.jsx;
+const jsxs = jsxRuntime.exports.jsxs;
+function Counter() {
+  const [count, setCount] = react.exports.useState(0);
+  return /* @__PURE__ */ jsxs(&quot;div&quot;, {
+    children: [
+      /* @__PURE__ */ jsxs(&quot;p&quot;, {
+        children: [&quot;count: &quot;, count],
+      }),
+      /* @__PURE__ */ jsx(&quot;button&quot;, {
+        onClick: () =&gt; setCount((count2) =&gt; count2 + 1),
+        children: &quot;Add&quot;,
+      }),
+    ],
+  });
+}
+function App() {
+  const [show, setShow] = react.exports.useState(true);
+  return /* @__PURE__ */ jsxs(&quot;div&quot;, {
+    children: [
+      /* @__PURE__ */ jsx(&quot;button&quot;, {
+        onClick: () =&gt; setShow((show2) =&gt; !show2),
+        children: &quot;Toggle&quot;,
+      }),
+      show &amp;&amp;
+        /* @__PURE__ */ jsx(KeepAlive, {
+          children: /* @__PURE__ */ jsx(Counter, {}),
+        }),
+    ],
+  });
+}
+ReactDOM.render(
+  /* @__PURE__ */ jsx(reactActivation.exports.AliveScope, {
+    children: /* @__PURE__ */ jsx(App, {}),
+  }),
+  document.getElementById(&quot;root&quot;)
+);
+</code></pre>
+<pre><code class="language-js">// vendor.8e846e2e.js
+// ...
+var reactActivation = { exports: {} };
+// ...
+var KeepAlive = reactActivation.exports;
+// ...
+export {
+  KeepAlive as K,
+  ReactDOM as R,
+  reactActivation as a,
+  jsxRuntime as j,
+  react as r,
+};
+</code></pre>
+<p>这里的 KeepAlive 实际上是：</p>
+<pre><code class="language-js">{
+  AliveScope: ƒ ()
+  KeepAlive: ƒ ()
+  NodeKey: ƒ ()
+  autoFixContext: ƒ ()
+  createContext: ƒ ()
+  default: ƒ ()
+  fixContext: ƒ ()
+  useActivate: ƒ ()
+  useAliveController: ƒ ()
+  useUnactivate: ƒ ()
+  withActivation: ƒ ()
+  withAliveScope: ƒ ()
+  __esModule: true
+}
+</code></pre>
+<p>所以才会报错<code>Element type is invalid</code></p>
+<p>Vite 在生产模式下使用 Rollup 对应用进行打包，在处理 react-activation 模块时缺失了对 __esModule 的判断和对 default 属性的处理，导致开发和构建不一致。</p>
+<h3>Vite 与 webpack 的区别</h3>
+<p>webpack 会将 ES Module 和 CommonJS 全部统一处理成 ComomJS，最后的 bundle 文件中是级联的 CommonJS 模块，运行时根据 __esModule 判断原模块是否是 ES Module。Vite 和 webpack 走的是相反的一条路，它将 CommonJS 转成 ES Module。</p>
+<h2>总结</h2>
+<p>export default 的问题，归根结底是 CommonJS 和 ES Module 的互操作性问题，二者不完全兼容。也就是 <code>import KeepAlive from 'react-activation'</code>和 <code>const reactActivation = require('react-activation')</code>不是直接对应关系。</p>
+<p>两者的关系，如下：</p>
+<ul>
+<li>默认导入：</li>
+</ul>
+<pre><code class="language-js">import KeepAlive from &quot;react-activation&quot;;
+// 近似于
+const KeepAlive = require(&quot;react-activation&quot;).default;
+</code></pre>
+<ul>
+<li>命名空间导入</li>
+</ul>
+<pre><code class="language-js">import * as reactActivation from &quot;react-activation&quot;;
+// 近似于
+const reactActivation = require(&quot;react-activation&quot;);
+</code></pre>
+<ul>
+<li>有名导入</li>
+</ul>
+<pre><code class="language-js">import { KeepAlive } from &quot;react-activation&quot;;
+// 近似于
+const { KeepAlive } = require(&quot;react-activation&quot;);
+</code></pre>
+<p>如今浏览器和 Node.js 都已原生支持 ES Module，但 npm 上依然有着存量巨大的 CommonJS 包，为了避免互操作时掉进默认导出的坑，日常开发更推荐使用有名导出。</p>
+]]></content:encoded>
+            <author>cwzp990@gmail.com (Juzi)</author>
+        </item>
+        <item>
+            <title><![CDATA[vitepress博客]]></title>
+            <link>https://www.cwzp990.top/posts/vitepress.html</link>
+            <guid>https://www.cwzp990.top/posts/vitepress.html</guid>
+            <pubDate>Fri, 18 Nov 2022 00:00:00 GMT</pubDate>
+            <description><![CDATA[blog GithubPages]]></description>
+            <content:encoded><![CDATA[<p>之前是在 gitee 上部署，结果需要上传身份证，甚是麻烦，现迁移到 github 上</p>
+<h2>构建 vitepress 项目</h2>
+<ol>
+<li>新建文件夹</li>
+</ol>
+<pre><code class="language-bash">mkdir vitepress-blog
+</code></pre>
+<ol start="2">
+<li>使用编译器打开该文件夹</li>
+<li>打开终端</li>
+<li>初始化项目</li>
+</ol>
+<pre><code class="language-bash">yarn init
+</code></pre>
+<ol start="5">
+<li>本地安装 VitePress</li>
+</ol>
+<pre><code class="language-bash">yarn add vitepress --dev
+</code></pre>
+<ol start="6">
+<li>编写脚本</li>
+</ol>
+<pre><code class="language-bash">#! /usr/bin/env sh
+
+set -o
+yarn run build
+
+cd .vitepress/dist
+
+git init
+git add -A
+git commit -m &quot;deploy&quot;
+
+git push -f git@github.com:cwzp990/vitepress-blog.git master:gh-pages
+
+cd -
+
+rm -rf .vitepress/dist
+</code></pre>
+<ol start="7">
+<li>添加脚本</li>
+</ol>
+<pre><code class="language-json">  &quot;scripts&quot;: {
+    &quot;deploy&quot;: &quot;bash deploy.sh&quot;,
+    &quot;dev&quot;: &quot;vitepress dev&quot;,
+    &quot;build&quot;: &quot;vitepress build&quot;,
+    &quot;serve&quot;: &quot;vitepress serve&quot;
+  },
+</code></pre>
+]]></content:encoded>
+            <author>cwzp990@gmail.com (Juzi)</author>
+        </item>
+    </channel>
+</rss>

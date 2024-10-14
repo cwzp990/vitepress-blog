@@ -157,3 +157,62 @@ int main() {
 ## 函数
 
 ### 函数重载
+
+### 多态与虚函数
+
+> 多态分为编译时多态和运行时多态
+
+- 编译时多态主要是指函数的重载包括运算符的重载。对重载函数的调用，在编译时就可以根据实参确定应该调用哪个函数、因此称为编译时多态。编译阶段的多态称为静态多态。
+
+- 运行时多态则和继承、虚函数等概念有关。
+
+> C++中的多态是面向对象编程的一个重要概念，指的是通过基类指针或引用调用派生类对象的成员函数对，根据实际对象的类型来决定调用哪个类中的成员函数。实现多态的核心机制是基于虚函数`vitual function`。在基类中声明虚函数，并在派生类中进行重写(覆盖)。当通过基类指针或引用调用虚函数时，会根据实际对象的类理来动态绑定到正确的函数实现。
+
+```cpp
+#include <iostream>
+
+class Animal {
+    public:
+    virtual void makeSound() { // 声明为虚函数
+        std::cout << "Animal make sound" << std::endl;
+    }
+};
+
+class Dog : public Animal {
+    public:
+        void makeSound() override {
+            std::cout << "dog barks" << std::endl;
+        }
+};
+
+class Cat : public Animal {
+    public:
+        void makeSound() override {
+            std::cout << "cat meows" << std::endl;
+        }
+};
+
+int main() {
+    Animal* animal1 = new Dog();
+    Animal* animal2 = new Cat();
+
+    animal1->makeSound();
+    animal2->makeSound();
+
+    delete animal1;
+    delete animal2;
+
+    return 0;
+}
+
+/**
+    dog barks
+    cat meows
+ */
+```
+
+## 流类库
+
+
+
+
